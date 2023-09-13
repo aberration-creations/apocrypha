@@ -1,5 +1,6 @@
 const Canvas = @import("canvas.zig").Canvas(u32);
 const std = @import("std");
+const font = @import("font.zig");
 
 
 pub fn main() !void {
@@ -23,11 +24,11 @@ pub fn main() !void {
         var y = (canvas.height-height)/3;
         var t: f32 = @floatFromInt(frame);
         t *= 1.0/24.0;
-        x += @intFromFloat(std.math.sin(t)*100.0+100.0);
-        y += @intFromFloat(std.math.cos(t)*100.0+100.0);
     
         canvas.clear(0xff202020);
         drawFrame(&canvas, x, y, width, height);
+        font.drawText(&canvas, font.internalFont, 64, 64, "The quick brown fox jumps over the lazy dog!");
+        font.drawText(&canvas, font.internalFont, 64, 64+32, "Citrus irjal endzsint!");
 
         try dumpToStdout(canvas);
         frame += 1;
