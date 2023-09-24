@@ -8,6 +8,12 @@
             "type": "shell",
             "command": "nodemon -e zig -x \"clear && zig run src/main.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra\"",
             "problemMatcher": []
+        },
+        {
+            "label": "watch mainIntersection",
+            "type": "shell",
+            "command": "nodemon -e zig -x \"clear && zig run src/mainIntersection.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra\"",
+            "problemMatcher": []
         }
     ]
 }

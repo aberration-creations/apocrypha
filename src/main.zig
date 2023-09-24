@@ -1,6 +1,7 @@
 const Canvas = @import("canvas.zig").Canvas(u32);
 const std = @import("std");
 const font = @import("font.zig");
+const dumpToStdout = @import("./dumpCanvas32ToStdout.zig").dumpCanvasToStdout;
 
 
 pub fn main() !void {
@@ -52,30 +53,4 @@ fn drawButton(canvas: *Canvas, x: usize, y: usize, width: usize, height: usize) 
 {
     canvas.rect(x-1,y-1,x+width+1,y+height+1, 0xff202020);
     canvas.rect(x,y,x+width,y+height, 0xff303030);
-}
-
-fn dumpToStdout(canvas: Canvas) !void
-{
-    const file = std.io.getStdOut();
-
-    var data: []u8 = undefined;
-    data.ptr = @ptrCast(canvas.pixels.ptr);
-    data.len = canvas.pixels.len * @sizeOf(u32);
-    const bytes_written = try file.writeAll(data);
-    _ = bytes_written;
-}
-
-fn dumpToFile(canvas: Canvas, path: []const u8) !void {
-
-    const file = try std.fs.cwd().createFile(
-        path,
-        .{ .read = true },
-    );
-    defer file.close();
-    
-    var data: []u8 = undefined;
-    data.ptr = @ptrCast(canvas.pixels.ptr);
-    data.len = canvas.pixels.len * @sizeOf(u32);
-    const bytes_written = try file.writeAll(data);
-    _ = bytes_written;
 }

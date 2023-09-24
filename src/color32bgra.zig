@@ -3,7 +3,7 @@ const std = @import("std");
 pub const u32_bgra = u32;
 
 /// expect t to be in 0..1024 range
-fn mixColor32bgra(a: u32, b: u32, t: u16) u32 
+pub fn mixColor32bgra(a: u32, b: u32, t: u16) u32_bgra 
 {
     var a_b: u8 = @intCast(a & 0xff);
     var a_g: u8 = @intCast((a >> 8) & 0xff);
@@ -17,7 +17,16 @@ fn mixColor32bgra(a: u32, b: u32, t: u16) u32
     var c_g = fixedLerp(a_g, b_g, t);
     var c_r = fixedLerp(a_r, b_r, t);
     var c_a = fixedLerp(a_a, b_a, t);
-    return (@as(u32,c_a) << 24) | (@as(u32,c_r) << 16) | (@as(u32,c_g) << 8) | @as(u32,c_b);
+    return makeColor32bgra(c_r, c_g, c_b, c_a);
+}
+
+pub fn mixColor32bgraByFloat(a: u32, b: u32, f: anytype) u32_bgra
+{
+    var t: u16 = 0;
+    _ = t;
+    if (f <= 0) return a;
+    if (f >= 1) return b;
+    return mixColor32bgra(a, b, @intFromFloat(f*1024));
 }
 
 /// expect t to be in 0..1024 range
@@ -34,4 +43,12 @@ test "mix works as expected" {
     try std.testing.expectEqual(mixColor32bgra(0, 0xffffffff, 0), 0);
     try std.testing.expectEqual(mixColor32bgra(0, 0xffffffff, 512), 0x7f7f7f7f);
     try std.testing.expectEqual(mixColor32bgra(0xff008080, 0xff204040, 512), 0xff106060);
+}
+
+pub inline fn makeColor32bgra(r: u8, g: u8, b: u8, a: u8) u32_bgra
+{
+    return @as(u32,b) 
+        | (@as(u32,g) << 8) 
+        | (@as(u32,r) << 16) 
+        | (@as(u32,a) << 24);
 }
