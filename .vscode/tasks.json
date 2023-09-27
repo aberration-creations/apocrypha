@@ -14,6 +14,18 @@
             "type": "shell",
             "command": "nodemon -e zig -x \"clear && zig run src/mainIntersection.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra\"",
             "problemMatcher": []
-        }
+        },
+        {
+            "label": "record",
+            "type": "shell",
+            "command": "rm out.mp4 && clear && zig run src/mainIntersection.zig | ffmpeg -f rawvideo -video_size 1920x1080 -pixel_format bgra -i - out.mp4 -c:v libx264 -pix_fmt yuv420p -profile:v low",
+            "problemMatcher": []
+        },
+        {
+            "label": "watch x11",
+            "type": "shell",
+            "command": "nodemon -e zig -x \"clear && zig run src/x11.zig -lc -lxcb\"",
+            "problemMatcher": []
+        },
     ]
 }
