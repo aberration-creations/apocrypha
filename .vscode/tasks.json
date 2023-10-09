@@ -24,7 +24,7 @@
         {
             "label": "watch x11",
             "type": "shell",
-            "command": "nodemon -e zig -x \"clear && zig run src/x11.zig -lc -lxcb\"",
+            "command": "nodemon -e zig -x \"clear && zig run src/x11.zig -lc -lxcb -lxcb-image\"",
             "problemMatcher": []
         },
     ]
