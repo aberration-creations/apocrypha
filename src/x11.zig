@@ -56,6 +56,7 @@ pub fn main() void
         std.debug.print("flush result {}\n", .{ flushResult });
     }
 
+    var frame: u16 = 4;
     var pixmap_width: u16 = 256;
     var pixmap_height: u16 = 256;
     var pix_data: [256*256*4]u8 = undefined;
@@ -64,7 +65,7 @@ pub fn main() void
         for (0..pixmap_width) |px|
         {
             const dst = (px + py * pixmap_height) * 4;
-            const value: u8 = @intCast((px ^ py) & 0xff);
+            const value: u8 = @intCast(((px ^ py) + frame) & 0xff);
             pix_data[dst] = value;
             pix_data[dst+1] = value;
             pix_data[dst+2] = value;
@@ -74,6 +75,7 @@ pub fn main() void
     var pixmap = x.xcb_generate_id(c);
     _ = x.xcb_create_pixmap(c,depth,pixmap,win,pixmap_width,pixmap_height);
     var format = x.XCB_IMAGE_FORMAT_Z_PIXMAP;
+
     var image = x.xcb_image_create_native(c,pixmap_width,pixmap_height,@intCast(format),depth,null,pix_data.len,&pix_data);
     _ = x.xcb_image_put(c, pixmap, empty_gc, image, 0, 0, 0);
     _ = x.xcb_image_destroy(image);
@@ -99,6 +101,29 @@ pub fn main() void
                 const keyEvent = keyEventPtr.*;
                 if (keyEvent.detail == 9){
                     exitRequested = true;
+                }
+                else {
+                    frame += 1;
+                    for (0..pixmap_height) |py|
+                    {
+                        for (0..pixmap_width) |px|
+                        {
+                            const dst = (px + py * pixmap_height) * 4;
+                            const value: u8 = @intCast(((px ^ py) + frame) & 0xff);
+                            pix_data[dst] = value;
+                            pix_data[dst+1] = value;
+                            pix_data[dst+2] = value;
+                            pix_data[dst+3] = value;
+                        }
+                    }
+                    image = x.xcb_image_create_native(c,pixmap_width,pixmap_height,@intCast(format),depth,null,pix_data.len,&pix_data);
+                    _ = x.xcb_image_put(c, pixmap, empty_gc, image, 0, 0, 0);
+                    _ = x.xcb_image_destroy(image);
+                    // _ = x.xcb_image_subimage(image,0,0,pixmap_width,pixmap_height,null,pix_data.len,&pix_data);
+                    // _ = x.xcb_image_put(c, pixmap, empty_gc, image, 0, 0, 0);
+                    _ = x.xcb_copy_area(c,pixmap,win,empty_gc,0,0,0,0,pixmap_width,pixmap_height);
+                    _ = x.xcb_flush(c);
+                    std.debug.print("frame {}", .{frame});
                 }
             },
             else => {
