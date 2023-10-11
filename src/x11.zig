@@ -57,21 +57,11 @@ pub fn main() void
     }
 
     var frame: u16 = 4;
-    var pixmap_width: u16 = 256;
-    var pixmap_height: u16 = 256;
-    var pix_data: [256*256*4]u8 = undefined;
-    for (0..pixmap_height) |py|
-    {
-        for (0..pixmap_width) |px|
-        {
-            const dst = (px + py * pixmap_height) * 4;
-            const value: u8 = @intCast(((px ^ py) + frame) & 0xff);
-            pix_data[dst] = value;
-            pix_data[dst+1] = value;
-            pix_data[dst+2] = value;
-            pix_data[dst+3] = value;
-        }
-    }
+    const pixmap_width = 1024;
+    const pixmap_height = 1024;
+    var pix_data: [pixmap_width*pixmap_height*4]u8 = undefined;
+    renderXorTextureToCanvas(pixmap_width, pixmap_height, &pix_data, frame);
+    
     var pixmap = x.xcb_generate_id(c);
     _ = x.xcb_create_pixmap(c,depth,pixmap,win,pixmap_width,pixmap_height);
     var format = x.XCB_IMAGE_FORMAT_Z_PIXMAP;
@@ -91,10 +81,7 @@ pub fn main() void
         std.debug.print("event received type {}\n", .{ event.response_type });
         switch (event.response_type){
             x.XCB_EXPOSE => {
-                // x.xcb_expose_event_t *event = (xcb_expose_event_t *)event;
-                _ = x.xcb_poly_rectangle (c, win, black, 1, &[_]x.struct_xcb_rectangle_t{ .{.x=100, .y=10, .width=140, .height=30}});
-                _ = x.xcb_copy_area(c,pixmap,win,empty_gc,0,0,0,0,pixmap_width,pixmap_height);
-                _ = x.xcb_flush(c);
+                flushPixmap(c, win, empty_gc, pixmap, pixmap_width, pixmap_height, format, depth, &pix_data);
             },
             x.XCB_KEY_PRESS => {
                 const keyEventPtr = @as([*c]x.xcb_key_press_event_t, @ptrCast(eventPtr));
@@ -104,26 +91,9 @@ pub fn main() void
                 }
                 else {
                     frame += 1;
-                    for (0..pixmap_height) |py|
-                    {
-                        for (0..pixmap_width) |px|
-                        {
-                            const dst = (px + py * pixmap_height) * 4;
-                            const value: u8 = @intCast(((px ^ py) + frame) & 0xff);
-                            pix_data[dst] = value;
-                            pix_data[dst+1] = value;
-                            pix_data[dst+2] = value;
-                            pix_data[dst+3] = value;
-                        }
-                    }
-                    image = x.xcb_image_create_native(c,pixmap_width,pixmap_height,@intCast(format),depth,null,pix_data.len,&pix_data);
-                    _ = x.xcb_image_put(c, pixmap, empty_gc, image, 0, 0, 0);
-                    _ = x.xcb_image_destroy(image);
-                    // _ = x.xcb_image_subimage(image,0,0,pixmap_width,pixmap_height,null,pix_data.len,&pix_data);
-                    // _ = x.xcb_image_put(c, pixmap, empty_gc, image, 0, 0, 0);
-                    _ = x.xcb_copy_area(c,pixmap,win,empty_gc,0,0,0,0,pixmap_width,pixmap_height);
-                    _ = x.xcb_flush(c);
-                    std.debug.print("frame {}", .{frame});
+                    renderXorTextureToCanvas(pixmap_width, pixmap_height, &pix_data, frame);
+                    flushPixmap(c, win, empty_gc, pixmap, pixmap_width, pixmap_height, format, depth, &pix_data);
+                    std.debug.print("frame {}\n", .{frame});
                 }
             },
             else => {
@@ -134,6 +104,27 @@ pub fn main() void
         x.free(eventPtr);
     }
 
-
 }
 
+fn renderXorTextureToCanvas(pixmap_width: u16, pixmap_height: u16, pix_data: []u8, frame: u16) void {
+    for (0..pixmap_height) |py|
+    {
+        for (0..pixmap_width) |px|
+        {
+            const dst = (px + py * pixmap_width) * 4;
+            const value: u8 = @intCast(((px ^ py) + frame) & 0xff);
+            pix_data[dst] = value;
+            pix_data[dst+1] = value;
+            pix_data[dst+2] = value;
+            pix_data[dst+3] = value;
+        }
+    }
+}
+
+fn flushPixmap(c: ?*x.xcb_connection_t, win: u32, gc: u32, pixmap: u32, pixmap_width: u16, pixmap_height: u16, format: c_int, depth: u8, pix_data: []u8) void {
+    var image = x.xcb_image_create_native(c,pixmap_width,pixmap_height,@intCast(format),depth,null,@intCast(pix_data.len),pix_data.ptr);
+    _ = x.xcb_image_put(c, pixmap, gc, image, 0, 0, 0);
+    _ = x.xcb_image_destroy(image);
+    _ = x.xcb_copy_area(c,pixmap,win,gc,0,0,0,0,pixmap_width,pixmap_height);
+    _ = x.xcb_flush(c);
+}
