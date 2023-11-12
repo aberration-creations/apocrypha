@@ -4,15 +4,15 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "watch main",
+            "label": "main",
             "type": "shell",
-            "command": "nodemon -e zig -x \"clear && zig run main.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra\"",
+            "command": "clear && zig run main.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra",
             "problemMatcher": []
         },
         {
-            "label": "watch mainIntersection",
+            "label": "mainIntersection",
             "type": "shell",
-            "command": "nodemon -e zig -x \"clear && zig run mainIntersection.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra\"",
+            "command": "clear && zig run mainIntersection.zig | ffplay -i pipe: -f rawvideo -video_size 1920x1080 -pixel_format bgra",
             "problemMatcher": []
         },
         {
@@ -22,9 +22,15 @@
             "problemMatcher": []
         },
         {
-            "label": "watch x11",
+            "label": "x11",
             "type": "shell",
-            "command": "nodemon -e zig -x \"clear && zig run x11.zig -lc -lxcb -lxcb-image\"",
+            "command": "clear && zig run x11.zig -lc -lxcb -lxcb-image",
+            "problemMatcher": []
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "clear && zig test src/index.zig",
             "problemMatcher": []
         },
     ]

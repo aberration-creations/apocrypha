@@ -1,4 +1,4 @@
-const BoundingBox = @import("./boundingBox.zig").BoundingBox;
+const BoundingBox = @import("../math/math.zig").Box;
 
 pub fn Context(comptime P: type) type {
 
