@@ -1,8 +1,7 @@
 const std = @import("std");
-const Canvas = @import("canvas.zig").Canvas(u32);
+const Canvas = @import("../canvas.zig").Canvas(u32);
 
-
-pub const FontDataChunk = struct { 
+pub const FontDataChunk = struct {
     alphaMap: []const u8,
     alphaMapWidth: usize,
     alphaMapHeight: usize,
@@ -17,29 +16,23 @@ pub const FontData = struct {
     chunks: []const FontDataChunk,
 };
 
-pub const internalFont: FontData = .{
-    .chunks = &[_]FontDataChunk{ 
-        FontDataChunk {
-            .alphaMap = @embedFile("./fontmap/fontmap.raw"),
-            .alphaMapWidth = 256,
-            .alphaMapHeight = 256,
-            .cellsUsedPerGridRow = 16,
-            .firstCodePoint = 16,
-            .totalCells = 256,
-            .gridCellHeight = 32,
-            .gridCellWidth = 19,
-        }
-    }
-};
+pub const internalFont: FontData = .{ .chunks = &[_]FontDataChunk{FontDataChunk{
+    .alphaMap = @embedFile("./fontmap/fontmap.raw"),
+    .alphaMapWidth = 256,
+    .alphaMapHeight = 256,
+    .cellsUsedPerGridRow = 16,
+    .firstCodePoint = 16,
+    .totalCells = 256,
+    .gridCellHeight = 32,
+    .gridCellWidth = 19,
+}} };
 
-pub fn drawText(canvas: *Canvas, font: FontData, x: usize, y: usize, string: []const u8) void
-{
+pub fn drawText(canvas: *Canvas, font: FontData, x: usize, y: usize, string: []const u8) void {
     var cursorX = x;
     var cursorY = y;
     for (string) |code| {
         for (font.chunks) |data| {
-            if (code < data.firstCodePoint or data.firstCodePoint + data.totalCells <= code)
-            {   
+            if (code < data.firstCodePoint or data.firstCodePoint + data.totalCells <= code) {
                 continue;
             }
             var cellIndex = code - data.firstCodePoint;
@@ -50,20 +43,18 @@ pub fn drawText(canvas: *Canvas, font: FontData, x: usize, y: usize, string: []c
             var srcY0 = gridRow * data.gridCellHeight;
             var srcX1 = srcX0 + data.gridCellWidth;
             var srcY1 = srcY0 + data.gridCellHeight;
-            
-            for (srcY0..srcY1, cursorY..) |srcY, dstY|
-            {
-                var alphaMapRowFrom = srcY*data.alphaMapWidth;
+
+            for (srcY0..srcY1, cursorY..) |srcY, dstY| {
+                var alphaMapRowFrom = srcY * data.alphaMapWidth;
                 var alphaMapRowTo = alphaMapRowFrom + data.alphaMapWidth;
-                var srcRow = data.alphaMap[alphaMapRowFrom*2..alphaMapRowTo*2];
+                var srcRow = data.alphaMap[alphaMapRowFrom * 2 .. alphaMapRowTo * 2];
                 var dstRow = canvas.getRow(dstY);
-                for (srcX0..srcX1, cursorX..) |srcX, dstX|
-                {
+                for (srcX0..srcX1, cursorX..) |srcX, dstX| {
                     var dst = dstRow[dstX];
 
-                    var p : u32 = @intCast(srcRow[srcX]);
+                    var p: u32 = @intCast(srcRow[srcX]);
                     p = p << 8 | p << 16 | p | 0xff000000;
-                    
+
                     dstRow[dstX] = dst | p;
                 }
             }

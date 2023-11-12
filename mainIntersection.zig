@@ -1,11 +1,10 @@
-const Canvas = @import("canvas.zig").Canvas(u32);
+const ui = @import("./src/index.zig");
 const std = @import("std");
-const font = @import("font.zig");
-const dumpToStdout = @import("./dumpCanvas32ToStdout.zig").dumpCanvasToStdout;
-const color = @import("./color32bgra.zig").makeColor32bgra;
-const mixColor = @import("./color32bgra.zig").mixColor32bgraByFloat;
-const Box = @import("./boundingBox.zig").BoundingBox(u32);
 
+const Canvas = ui.Canvas32;
+const color = ui.color32bgra.makeColor32bgra;
+const mixColor = ui.color32bgra.mixColor32bgraByFloat;
+const Box = ui.BoxGeneric(u32);
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -83,7 +82,7 @@ pub fn main() !void {
                 }
             }
         }
-        try dumpToStdout(canvas);
+        try ui.dumpCanvas32ToStdout(canvas);
         frame += 1;
     }
 

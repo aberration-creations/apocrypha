@@ -1,7 +1,7 @@
 const std = @import("std");
 const Canvas = @import("canvas.zig").Canvas(u32);
 
-pub fn dumpCanvas32ToFile(canvas: Canvas, path: []const u8) !void {
+pub fn dumpCanvasToFile(canvas: Canvas, path: []const u8) !void {
 
     const file = try std.fs.cwd().createFile(
         path,
