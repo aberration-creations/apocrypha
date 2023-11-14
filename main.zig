@@ -43,7 +43,6 @@ fn drawFrame(canvas: *Canvas, font: *Font, x: usize, y: usize, width: usize, hei
     canvas.rect(x - 1, y - 1, x + width + 1, y + height + 1, 0xff101010);
     canvas.rect(x, y, x + width, y + height, 0xff303030);
     canvas.rect(x, y + 32, x + width, y + height, 0xff282828);
-    // canvas.rect(x + width - 16 - 8, y + 16 - 8, x + width - 8, y + 32 - 8, 0xff404040);
     try ui.drawText(canvas, font, 14, 0xff909090, x + width - 16 - 6, y + 16 - 11, "x");
 
     var bottom = y + height;

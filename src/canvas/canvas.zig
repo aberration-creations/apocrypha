@@ -85,14 +85,30 @@ pub fn Canvas(comptime P: type) type {
             }
         }
 
-        pub fn rect(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
+        /// please use rect_safe instead
+        pub const rect = rect_unsafe;
+
+        pub fn rect_safe(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, p: P) void {
+            var clip_x0: usize = 0;
+            var clip_y0: usize = 0;
+            var clip_x1: usize = 0;
+            var clip_y1: usize = 0;
+            if (x1 > 0) clip_x1 = @intCast(x1);
+            if (y1 > 0) clip_y1 = @intCast(y1);
+            if (x0 > 0) clip_x0 = @intCast(x0);
+            if (y0 > 0) clip_y0 = @intCast(y0);
+            if (clip_x1 >= self.width) clip_x1 = self.width;
+            if (clip_y1 >= self.height) clip_y1 = self.height;
+            self.rect_unsafe(clip_x0, clip_y0, clip_x1, clip_y1, p);
+        }
+
+        pub fn rect_unsafe(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
             for (y0..y1) |y| {
-                var row = self.getStride(y, x0, x1);
-                for (row, 0..) |_, x| {
-                    row[x] = p;
-                }
+                var dst = self.getStride(y, x0, x1);
+                @memset(dst, p);
             }
         }
+
 
         pub fn deinit(self: *Self) void {
             if (self.data.len > 0)
@@ -158,4 +174,14 @@ test "rect on canvas"
     try std.testing.expectEqual(c.getPixel(4,4), 0xffffff);
     try std.testing.expectEqual(c.getPixel(7,7), 0xffffff);
     try std.testing.expectEqual(c.getPixel(8,8), 0x000000);
+}
+
+test "rect is clipped"
+{
+    var allocator = std.testing.allocator;
+    var c = try Canvas(u32).initAlloc(allocator, 16, 16);
+    defer c.deinit();
+    c.rect_safe(8, 8, 24, 24, 0);
+    c.rect_safe(-8, -8, 24, 24, 1);
+    c.rect_safe(-80, -80, -24, -24, 1);
 }
