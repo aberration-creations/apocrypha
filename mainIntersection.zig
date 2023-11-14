@@ -82,7 +82,7 @@ pub fn main() !void {
                 }
             }
         }
-        try ui.dumpCanvas32ToStdout(canvas);
+        try ui.dumpCanvasToStdout(canvas);
         frame += 1;
     }
 
