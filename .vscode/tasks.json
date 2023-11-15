@@ -28,6 +28,12 @@
             "problemMatcher": []
         },
         {
+            "label": "window",
+            "type": "shell",
+            "command": "clear && zig run window.zig",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",

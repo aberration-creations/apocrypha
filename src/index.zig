@@ -15,7 +15,16 @@ pub const color32bgra = @import("./canvas/color32bgra.zig");
 pub const BoxGeneric = @import("./math/boundingBox.zig").BoundingBox;
 pub const Box = BoxGeneric(u32);
 
-pub const x11 = @import("./adapters/x11.zig");
+
+pub const window = @import("./window/window.zig");
+pub const x11 = window.x11;
+pub const win32 = window.win32;
+
+pub const Window = window.Window;
+pub const nextEvent = window.nextEvent;
+pub const Event = window.Event;
+pub const EventData = window.EventData;
+pub const Key = window.Key;
 
 test {
     _ = @import("./math/math.zig");
