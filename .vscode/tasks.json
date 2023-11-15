@@ -34,6 +34,12 @@
             "problemMatcher": []
         },
         {
+            "label": "window linux",
+            "type": "shell",
+            "command": "clear && zig run window.zig -lc -lxcb -lxcb-image",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",

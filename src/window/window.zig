@@ -22,6 +22,7 @@ const maxWindowCount = 16;
 var nextWindowHandle: u16 = 0;
 var win32W: [maxWindowCount]win32.Window = undefined;
 var x11W: [maxWindowCount]x11.X11Window = undefined;
+var x11C: x11.X11Connection = undefined;
 
 /// cross-platform Window primite, 
 /// in general you need one to get something on screen
@@ -39,14 +40,17 @@ pub const Window = struct {
             .windows => win32W[handle] = win32.Window.init(.{
                 .title = options.title
             }),
-            .linux => x11W[handle] = x11.X11Window.init(.{}, .{
-                .fullscreen = options.fullscreen,
-                .width = options.width,
-                .height = options.height,
-                .title = options.title,
-                .x = options.x,
-                .y = options.y,
-            }),
+            .linux => {
+                x11C = x11.X11Connection.init();
+                x11W[handle] = x11.X11Window.init(&x11C, .{
+                    .fullscreen = options.fullscreen,
+                    .width = options.width,
+                    .height = options.height,
+                    .title = options.title,
+                    .x = options.x,
+                    .y = options.y,
+                });
+            },
             else => @compileError("not supported")
         }
         return Window {
@@ -125,6 +129,7 @@ pub fn nextEvent(options: NextEventOptions) ?EventData {
         },
         .linux => {
             // TODO
+            return EventData { .unknown = undefined };
         },
         else => @compileError("not supported")
     }
