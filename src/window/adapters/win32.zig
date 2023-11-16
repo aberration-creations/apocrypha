@@ -1,7 +1,14 @@
 const std = @import("std");
+const common = @import("./common.zig");
+
+pub const MSG = user32.MSG;
+pub const user32 = win32.user32;
+
+const EventData = common.EventData;
+const Event = common.Event;
+const Key = common.Key;
 
 const win32 = std.os.windows;
-pub const user32 = win32.user32;
 const ATOM = u16;
 const HINSTANCE = win32.HINSTANCE;
 const HICON = win32.HICON;
@@ -17,10 +24,7 @@ extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR
 const staticClassName = "StaticWindowClass";
 var staticClassAtom: win32.ATOM = 0;
 
-const WindowInitOptions = struct {
-    title: []const u8 = "Window"
-
-};
+const WindowInitOptions = common.WindowCreateOptions;
 
 pub const Window = struct {
 
@@ -102,6 +106,73 @@ fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, win
     return atom;
 }
 
+pub fn processMessagesUntilQuit() void
+{
+    var msg: user32.MSG = undefined;
+    while (user32.GetMessageA(&msg, null, 0, 0) > 0)
+    {
+        _ = user32.TranslateMessage(&msg);
+        _ = user32.DispatchMessageA(&msg);
+    }
+}
+
+/// get next event from caller thread's message queue 
+/// expected to be called from the main 'GUI' thread
+pub fn nextEvent(options: common.NextEventOptions) ?EventData {
+    var message: ?user32.MSG = null;
+    if (options.blocking) {
+        message = getMessageRaw();
+    }
+    else {
+        message = peekMessageRaw();
+    }
+    if (message) |value| {
+        return eventFromWin32Message(value);
+    }
+    else {
+        return null;
+    }
+}
+
+/// get next message from thread's message queue
+pub fn getMessageRaw() ?user32.MSG
+{
+    var msg: user32.MSG = undefined;
+    if (user32.GetMessageA(&msg, null, 0, 0) > 0)
+    {
+        _ = user32.TranslateMessage(&msg);
+        _ = user32.DispatchMessageA(&msg);
+        return msg;
+    }
+    else 
+    {
+        return null;
+    }
+}
+
+/// peek next message from thread's message queue
+pub fn peekMessageRaw() ?user32.MSG {
+    var msg: user32.MSG = undefined;
+    if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0)
+    {
+        _ = user32.TranslateMessage(&msg);
+        _ = user32.DispatchMessageA(&msg);
+        return msg;
+    }
+    else 
+    {
+        return null;
+    }
+}
+
+pub fn eventFromWin32Message(msg: user32.MSG) EventData {
+    return switch (msg.message) {
+        user32.WM_KEYDOWN => EventData { .keydown = Key.escape }, // TODO extend
+        else => EventData { .unknown = undefined },
+    };
+}
+
+
 // fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT
 // {
 //     switch (uMsg)
@@ -125,44 +196,3 @@ fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, win
 //     }
 //     return user32.DefWindowProcA(hwnd, uMsg, wParam, lParam);
 // }
-
-pub fn processMessagesUntilQuit() void
-{
-    var msg: user32.MSG = undefined;
-    while (user32.GetMessageA(&msg, null, 0, 0) > 0)
-    {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
-    }
-}
-
-pub fn getMessage() ?user32.MSG
-{
-    var msg: user32.MSG = undefined;
-    if (user32.GetMessageA(&msg, null, 0, 0) > 0)
-    {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
-        return msg;
-    }
-    else 
-    {
-        return null;
-    }
-}
-
-pub fn peekMessage() ?user32.MSG {
-    var msg: user32.MSG = undefined;
-    if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0)
-    {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
-        return msg;
-    }
-    else 
-    {
-        return null;
-    }
-}
-
-pub const MSG = user32.MSG;

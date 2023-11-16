@@ -40,6 +40,12 @@
             "problemMatcher": []
         },
         {
+            "label": "window wine",
+            "type": "shell",
+            "command": "clear && zig build-exe window.zig -target x86_64-windows && wine window.exe && rm window.exe window.exe.obj window.pdb",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",

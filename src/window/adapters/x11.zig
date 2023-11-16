@@ -1,5 +1,10 @@
 // x11 support library
 
+const common = @import("./common.zig");
+
+const EventData = common.EventData;
+const Event = common.Event;
+
 pub const x = @cImport({
     @cInclude("xcb/xcb.h");
     @cInclude("xcb/xcb_image.h");
@@ -53,16 +58,37 @@ pub const X11Connection = struct {
         }
         return self.wm_fullscreen;
     }
+
+    pub fn waitForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
+        var value = x.xcb_wait_for_event(self.conn);
+        if (value < 100) return null;
+        return value.*;
+    }
+
+    pub fn pollForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
+        var value = x.xcb_poll_for_event(self.conn);
+        if (value < 100) return null;
+        return value.*;
+    }
+
+    pub fn nextEvent(self: *X11Connection, options: common.NextEventOptions) ?common.EventData {
+        var raw_event: ?x.xcb_generic_event_t = null;
+        if (options.blocking) {
+            raw_event = self.waitForEventRaw();
+        } else {
+            raw_event = self.pollForEventRaw();
+        }
+        if (raw_event) |value| {
+            return eventFrom(value);
+        }
+        else {
+            return null;
+        }
+    }
+
 };
 
-pub const X11WindowInitOptions = struct {
-    x: i16 = 0,
-    y: i16 = 0,
-    width: u16 = 600,
-    height: u16 = 400,
-    title: []const u8 = "Window",
-    fullscreen: bool = false,
-};
+pub const X11WindowInitOptions = common.WindowCreateOptions;
 
 pub const X11Window = struct {
     win: u32,
@@ -167,3 +193,48 @@ pub const XWindow = struct {
     depth: u8,
     pix_data: []u8,
 };
+
+
+fn eventFrom(raw: x.xcb_generic_event_t) common.EventData {
+    switch (raw.response_type) {
+        x.XCB_CONFIGURE_NOTIFY => {
+            const configureNotify = @as([*c]const x.xcb_configure_notify_event_t, @ptrCast(&raw)).*;
+            return EventData { 
+                .resize = common.Size { 
+                    .width = configureNotify.width, 
+                    .height = configureNotify.height 
+                }
+            };
+        },
+        x.XCB_EXPOSE => {
+            // const exposeEventPtr = @as([*c]ui.x11.x.xcb_expose_event_t, @ptrCast(eventPtr));
+            // std.debug.print("expose {} {}\n", .{ exposeEventPtr.*.width, exposeEventPtr.*.height });
+            // win.presentCanvas(width, height, data);
+            return EventData { .unknown = undefined };
+        },
+        x.XCB_KEY_PRESS => {
+            const keyPress = @as([*c]const x.xcb_key_press_event_t, @ptrCast(&raw)).*;
+            return EventData { .keydown = switch (keyPress.detail) {
+                9 => .escape,
+                else => .unknown,
+            }};
+        },
+        x.XCB_MOTION_NOTIFY => {
+            // const motionEventPtr = @as([*c]ui.x11.x.xcb_motion_notify_event_t, @ptrCast(eventPtr));
+            // const motionEvent = motionEventPtr.*;
+            // _ = motionEvent;
+            // std.debug.print("motion {} {}\n", .{ motionEvent.event_x, motionEvent.event_x });
+            return EventData { .unknown = undefined };
+        },
+        x.XCB_NO_EXPOSURE => {
+            // const noExposurePtr = @as([*c]ui.x11.x.xcb_no_exposure_event_t, @ptrCast(eventPtr));
+            // const noExposure = noExposurePtr.*;
+            // std.debug.print("no exposure {} \n", .{noExposure.major_opcode});
+            return EventData { .unknown = undefined };
+        },
+        else => {
+            // std.debug.print("event type {} not handled\n", .{event.response_type});
+            return EventData { .unknown = undefined };
+        },
+    }
+}

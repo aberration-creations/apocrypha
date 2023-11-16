@@ -1,2 +1,4 @@
 *.mp4
 *.bin
+*.exe
+*.pdb
