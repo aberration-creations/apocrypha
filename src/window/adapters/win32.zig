@@ -21,8 +21,11 @@ extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
 extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
 
-const staticClassName = "StaticWindowClass";
-var staticClassAtom: win32.ATOM = 0;
+const static_class_name = "StaticWindowClass";
+var static_class_atom: win32.ATOM = 0;
+var static_event_queue: [256]EventData = undefined;
+var static_event_queue_head: u8 = 0;
+var static_event_queue_tail: u8 = 0;
 
 const WindowInitOptions = common.WindowCreateOptions;
 
@@ -35,7 +38,7 @@ pub const Window = struct {
         const hInstance: win32.HINSTANCE = GetModuleHandleA(null);
 
         ensureStaticClassRegistered(hInstance);
-        const className = staticClassName;
+        const className = static_class_name;
 
         var titleBuffer: [1024]u8 = undefined; 
         // TODO maybe unicode support
@@ -76,13 +79,13 @@ pub const Window = struct {
 
 
 fn ensureStaticClassRegistered(hInstance: win32.HINSTANCE) void {
-    if (staticClassAtom != 0) {
+    if (static_class_atom != 0) {
         return;
     }
-    staticClassAtom = registerWindowClass(
-        hInstance, staticClassName, user32.DefWindowProcA
+    static_class_atom = registerWindowClass(
+        hInstance, static_class_name, staticWindowProc
     );
-    if (staticClassAtom == 0){
+    if (static_class_atom == 0){
         unreachable; // failed to register
     }
 }
@@ -119,80 +122,74 @@ pub fn processMessagesUntilQuit() void
 /// get next event from caller thread's message queue 
 /// expected to be called from the main 'GUI' thread
 pub fn nextEvent(options: common.NextEventOptions) ?EventData {
-    var message: ?user32.MSG = null;
+    if (static_event_queue_head != static_event_queue_tail) {
+        const result = static_event_queue[static_event_queue_head];
+        static_event_queue_head = static_event_queue_head +% 1;
+        return result;
+    }
     if (options.blocking) {
-        message = getMessageRaw();
+        getMessageRaw();
     }
     else {
-        message = peekMessageRaw();
+        peekMessageRaw();
     }
-    if (message) |value| {
-        return eventFromWin32Message(value);
-    }
+    if (static_event_queue_head != static_event_queue_tail) {
+        const result = static_event_queue[static_event_queue_head];
+        static_event_queue_head = static_event_queue_head +% 1;
+        return result;
+    } 
     else {
         return null;
     }
 }
 
 /// get next message from thread's message queue
-pub fn getMessageRaw() ?user32.MSG
+pub fn getMessageRaw() void
 {
     var msg: user32.MSG = undefined;
     if (user32.GetMessageA(&msg, null, 0, 0) > 0)
     {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
-        return msg;
-    }
-    else 
-    {
-        return null;
+        handleMessage(&msg);
     }
 }
 
 /// peek next message from thread's message queue
-pub fn peekMessageRaw() ?user32.MSG {
+pub fn peekMessageRaw() void{
     var msg: user32.MSG = undefined;
     if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0)
     {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
-        return msg;
-    }
-    else 
-    {
-        return null;
+        handleMessage(&msg);
     }
 }
 
-pub fn eventFromWin32Message(msg: user32.MSG) EventData {
-    return switch (msg.message) {
+fn handleMessage(msg: *user32.MSG) void {
+    _ = user32.TranslateMessage(msg);
+    _ = user32.DispatchMessageA(msg);
+}
+
+fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT
+{
+    var event: EventData = switch (uMsg)
+    {
         user32.WM_KEYDOWN => EventData { .keydown = Key.escape }, // TODO extend
+        user32.WM_PAINT => EventData { .unknown = undefined },
+        user32.WM_CLOSE => EventData { .closewindow = undefined },
+        user32.WM_MOUSEMOVE => EventData { 
+            .pointermove = common.Position {
+                .x = @intCast(lParam & 0xffff), 
+                .y = @intCast((lParam >> 16) & 0xffff), 
+            } 
+        },
+        user32.WM_SIZE => EventData { 
+            .resize = common.Size { 
+                .width = @intCast(lParam & 0xffff), 
+                .height = @intCast((lParam >> 16) & 0xffff), 
+            } 
+        },
+        user32.WM_LBUTTONDOWN => EventData { .unknown = undefined },
         else => EventData { .unknown = undefined },
     };
+    static_event_queue[static_event_queue_tail] = event;
+    static_event_queue_tail = static_event_queue_tail +% 1;
+    return user32.DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
-
-
-// fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT
-// {
-//     switch (uMsg)
-//     {
-//         user32.WM_PAINT => {
-
-//         },
-//         user32.WM_DESTROY => {
-//             user32.PostQuitMessage(0);
-//         },
-//         user32.WM_MOUSEMOVE => {
-
-//         },
-//         user32.WM_SIZE => {
-
-//         },
-//         user32.WM_LBUTTONDOWN => {
-
-//         },
-//         else => {}
-//     }
-//     return user32.DefWindowProcA(hwnd, uMsg, wParam, lParam);
-// }

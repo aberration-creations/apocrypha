@@ -62,14 +62,14 @@ pub const X11Connection = struct {
     pub fn waitForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
         var eventPtr = x.xcb_wait_for_event(self.conn);
         defer x.free(eventPtr);
-        if (eventPtr < 100) return null;
+        if (eventPtr == null) return null;
         return eventPtr.*;
     }
 
     pub fn pollForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
         var eventPtr = x.xcb_poll_for_event(self.conn);
         defer x.free(eventPtr);
-        if (eventPtr < 100) return null;
+        if (eventPtr == null) return null;
         return eventPtr.*;
     }
 

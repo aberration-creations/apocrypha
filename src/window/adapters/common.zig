@@ -6,8 +6,10 @@ pub const NextEventOptions = struct {
 
 pub const Event = enum {
     unknown,
+    closewindow,
     keydown,
     resize,
+    pointermove,
 };
 
 pub const Key = enum {
@@ -15,17 +17,23 @@ pub const Key = enum {
     escape,
 };
 
+pub const EventData = union(Event) {
+    unknown: void,
+    closewindow: void,
+    keydown: Key,
+    resize: Size,
+    pointermove: Position,
+};
+
 pub const Size = struct {
     width: u16,
     height: u16,
 };
 
-pub const EventData = union(Event) {
-    unknown: void,
-    keydown: Key,
-    resize: Size,
+pub const Position = struct {
+    x: i16,
+    y: i16,
 };
-
 
 pub const WindowCreateOptions = struct {
     x: i16 = 0,
