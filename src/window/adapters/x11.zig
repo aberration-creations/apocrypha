@@ -60,15 +60,17 @@ pub const X11Connection = struct {
     }
 
     pub fn waitForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
-        var value = x.xcb_wait_for_event(self.conn);
-        if (value < 100) return null;
-        return value.*;
+        var eventPtr = x.xcb_wait_for_event(self.conn);
+        defer x.free(eventPtr);
+        if (eventPtr < 100) return null;
+        return eventPtr.*;
     }
 
     pub fn pollForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
-        var value = x.xcb_poll_for_event(self.conn);
-        if (value < 100) return null;
-        return value.*;
+        var eventPtr = x.xcb_poll_for_event(self.conn);
+        defer x.free(eventPtr);
+        if (eventPtr < 100) return null;
+        return eventPtr.*;
     }
 
     pub fn nextEvent(self: *X11Connection, options: common.NextEventOptions) ?common.EventData {
