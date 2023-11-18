@@ -11,13 +11,10 @@ pub fn Canvas(comptime P: type) type {
     return struct {
         const Self = Canvas(P);
 
-        allocator: std.mem.Allocator = undefined,
+        allocator: ?std.mem.Allocator,
         pixels: []P,
         width: usize,
         height: usize,
-        boundaryTop: []P,
-        boundaryBottom: []P,
-        data: []P,
 
         /// not efficient but convenient
         pub inline fn getPixel(self: Self, x: usize, y: usize) P {   
@@ -44,13 +41,10 @@ pub fn Canvas(comptime P: type) type {
         /// initialize with allocator and allocate canvas
         pub fn initAlloc(allocator: std.mem.Allocator, width: usize, height: usize) !Self 
         {
-            var data = try allocator.alloc(P, width*(height+2));
+            var data = try allocator.alloc(P, width*height);
             return Self {
                 .allocator = allocator,
-                .boundaryTop = data[0..width],
-                .boundaryBottom = data[width*(height+1)..width*(height+2)],
-                .pixels = data[width..width*(height+1)],
-                .data = data,
+                .pixels = data,
                 .width = width,
                 .height = height,
             };
@@ -64,31 +58,26 @@ pub fn Canvas(comptime P: type) type {
                 return CanvasError.DoesNotFitIntoBuffer;
             }
             return Self {
-                .boundaryBottom = &EMPTY,
-                .boundaryTop = &EMPTY,
+                .allocator = null,
                 .height = height,
                 .width = width,
                 .pixels = buf,
-                .data = &EMPTY,
             };
         }
 
-        pub fn clear(self: *Self, pixel: P) void {
-            if (self.data.len > 0) {
-                @memset(self.data, pixel);
-            }
-            else 
-            {
-                @memset(self.boundaryTop, pixel);
-                @memset(self.pixels, pixel);
-                @memset(self.boundaryBottom, pixel);
-            }
+        pub fn reallocate(self: *Self, width: u32, height: u32) !void {
+            self.deinit();
+            const new = try initAlloc(self.allocator.?, width, height);
+            self.height = new.height;
+            self.width = new.width;
+            self.pixels = new.pixels;
         }
 
-        /// please use rect_safe instead
-        pub const rect = rect_unsafe;
+        pub fn clear(self: *Self, pixel: P) void {
+            @memset(self.pixels, pixel);
+        }
 
-        pub fn rect_safe(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, p: P) void {
+        pub fn rect(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, p: P) void {
             var clip_x0: usize = 0;
             var clip_y0: usize = 0;
             var clip_x1: usize = 0;
@@ -97,25 +86,37 @@ pub fn Canvas(comptime P: type) type {
             if (y1 > 0) clip_y1 = @intCast(y1);
             if (x0 > 0) clip_x0 = @intCast(x0);
             if (y0 > 0) clip_y0 = @intCast(y0);
-            if (clip_x1 >= self.width) clip_x1 = self.width;
-            if (clip_y1 >= self.height) clip_y1 = self.height;
-            self.rect_unsafe(clip_x0, clip_y0, clip_x1, clip_y1, p);
+            self.rectUnsigned(clip_x0, clip_y0, clip_x1, clip_y1, p);
         }
 
-        pub fn rect_unsafe(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
+        pub fn rectUnsigned(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
+            var clip_x0 = x0;
+            var clip_y0 = y0;
+            var clip_x1 = x1;
+            var clip_y1 = y1;
+            if (clip_x0 > self.width) clip_x0 = self.width;
+            if (clip_y0 > self.height) clip_y0 = self.height;
+            if (clip_x1 > self.width) clip_x1 = self.width;
+            if (clip_y1 > self.height) clip_y1 = self.height;
+            self.rectUnsafe(clip_x0, clip_y0, clip_x1, clip_y1, p);
+        }
+
+        pub fn rectUnsafe(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
             for (y0..y1) |y| {
                 var dst = self.getStride(y, x0, x1);
                 @memset(dst, p);
             }
         }
 
-
         pub fn deinit(self: *Self) void {
-            if (self.data.len > 0)
+            if (self.allocator) |allocator|
             {
-                self.allocator.free(self.data);
+                if (self.pixels.ptr != &EMPTY)
+                {
+                    allocator.free(self.pixels);
+                }
             }
-            self.data = &EMPTY;
+            self.pixels = &EMPTY;
         }
 
     };
@@ -176,12 +177,22 @@ test "rect on canvas"
     try std.testing.expectEqual(c.getPixel(8,8), 0x000000);
 }
 
+test "reallocate"
+{
+    var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
+    defer c.deinit();
+    try c.reallocate(64, 96);
+    try std.testing.expectEqual(c.width, 64);
+    try std.testing.expectEqual(c.height, 96);
+}
+
 test "rect is clipped"
 {
     var allocator = std.testing.allocator;
     var c = try Canvas(u32).initAlloc(allocator, 16, 16);
     defer c.deinit();
-    c.rect_safe(8, 8, 24, 24, 0);
-    c.rect_safe(-8, -8, 24, 24, 1);
-    c.rect_safe(-80, -80, -24, -24, 1);
+    c.rect(8, 8, 24, 24, 0);
+    c.rect(-8, -8, 24, 24, 1);
+    c.rect(-80, -80, -24, -24, 1);
+    c.rect(18, 18, 24, 24, 0);
 }

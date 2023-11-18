@@ -2,6 +2,7 @@ const std = @import("std");
 const ui = @import("./src/index.zig");
 
 pub fn main() !void {
+    
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer {
@@ -10,14 +11,15 @@ pub fn main() !void {
     }
 
     var frame: u16 = 0;
-    var canvas: ui.Canvas32 = try ui.Canvas32.initAlloc(allocator, 256, 256);
+    var canvas: ui.Canvas32 = try ui.Canvas32.initAlloc(allocator, 512, 512);
     defer canvas.deinit();
 
     const window = ui.Window.init(.{
         .title = "Xor Texture",
+        .width = @intCast(canvas.width),
+        .height = @intCast(canvas.height),
     });
     defer window.deinit();
-
 
     while (ui.nextEvent(.{ .blocking = true })) |evt| {
         switch (evt) {
@@ -28,20 +30,11 @@ pub fn main() !void {
             },
             ui.Event.keydown => |key| switch(key) {
                 ui.Key.escape => return,
-                else => std.debug.print("unknown key\n", .{}),
+                else => {},
             },
-            ui.Event.resize => |size| {
-                std.debug.print("resize to {}x{}\n", .{ size.width, size.height });
-                canvas.deinit();
-                canvas = try ui.Canvas32.initAlloc(allocator, size.width, size.height);
-            },
-            ui.Event.pointermove => |position| {
-                std.debug.print("pointer move to {} {}\n", .{ position.x, position.y });
-            },
+            ui.Event.resize => |size| try canvas.reallocate(size.width, size.height),
             ui.Event.closewindow => return,
-            else => {
-                // std.debug.print("unknown event\n", .{});
-            },
+            else => {},
         }
     }
 
