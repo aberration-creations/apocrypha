@@ -3,16 +3,26 @@ const common = @import("./common.zig");
 
 pub const MSG = user32.MSG;
 pub const user32 = win32.user32;
+pub const gdi32 = win32.gdi32;
 
 const EventData = common.EventData;
 const Event = common.Event;
 const Key = common.Key;
 
 const win32 = std.os.windows;
+const BOOL = win32.BOOL;
+const DWORD = win32.DWORD;
 const ATOM = u16;
 const HINSTANCE = win32.HINSTANCE;
 const HICON = win32.HICON;
 const HCURSOR = win32.HCURSOR;
+const HGDIOBJ = *opaque {};
+// const HBITMAP = *opaque {}; use HGDIOBJ
+const HDC = win32.HDC;
+const HWND = win32.HWND;
+
+// GDI constants
+const SRCCOPY: DWORD = 0x00CC0020;
 
 const IDI_APPLICATION = 32512;
 const IDC_ARROW = 32512;
@@ -20,6 +30,14 @@ const IDC_ARROW = 32512;
 extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
 extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
+
+extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque{}) HGDIOBJ;
+extern "gdi32" fn CreateCompatibleDC(hdc: HDC) HDC;
+extern "gdi32" fn GetDC(hwnd: HWND) HDC;
+extern "gdi32" fn SelectObject(hdc: HDC, hdobj: HGDIOBJ) HGDIOBJ;
+extern "gdi32" fn BitBlt(hdc: HDC, x: i32, y: i32, cx: i32, cy: i32, hdcSrc: HDC, x1: i32, y1: i32, rop: DWORD) BOOL;
+extern "gdi32" fn DeleteDC(hdc: HDC) BOOL;
+extern "gdi32" fn DeleteObject(hgdiobj: HGDIOBJ) BOOL;
 
 const static_class_name = "StaticWindowClass";
 var static_class_atom: win32.ATOM = 0;
@@ -31,7 +49,13 @@ const WindowInitOptions = common.WindowCreateOptions;
 
 pub const Window = struct {
 
-    hwnd: win32.HWND,
+    hwnd: HWND,
+    window_dc: ?HDC = null,
+    bitmap_dc: ?HDC = null,
+    bitmap: ?HGDIOBJ = null,
+    prev_width: u16 = undefined,
+    prev_height: u16 = undefined,
+    prev_data: []u32 = undefined,
 
     pub fn init(options: WindowInitOptions) Window 
     {
@@ -66,13 +90,61 @@ pub const Window = struct {
             };
         }
         else unreachable;
+        
 
+
+    }
+
+    pub fn presentCanvasU32BGRA(w: *Window, width: u16, height: u16, data: []u32) void {
+
+        if (w.window_dc == null) {
+            w.window_dc = GetDC(w.hwnd);
+        }
+
+        if (w.bitmap_dc == null) {
+            w.bitmap_dc = CreateCompatibleDC(w.window_dc.?);
+        }
+
+        if (w.bitmap == null or width != w.prev_height or height != w.prev_height or w.prev_data.ptr != data.ptr)
+        {
+            // need to create new bitmap (first call or resize)
+            const new_bitmap = CreateBitmap(
+                width,
+                height, 
+                1, // don't know what is it actually... let it be 1
+                32, // bpp
+                @ptrCast(data)
+            ); 
+            
+            _ = SelectObject(w.bitmap_dc.?, @ptrCast(new_bitmap));
+
+            if (w.bitmap) |bitmap| {
+                _ = DeleteObject(bitmap); // delete previous bitmap 
+            }
+
+            w.bitmap = new_bitmap;
+            w.prev_width = width;
+            w.prev_height = height;
+            w.prev_data = data;
+        }
+        
+        _ = BitBlt(w.window_dc.?, 0, 0, width, height, w.bitmap_dc.?, 0, 0, SRCCOPY);
 
     }
 
     pub fn deinit(self: Window) void {
         // TODO
-        _ = self;
+
+        if (self.window_dc) |dc| {
+            _ = DeleteDC(dc);
+        }
+        if (self.bitmap_dc) |dc| {
+            _ = DeleteDC(dc);
+        }
+        if (self.bitmap) |hgdiobj| {
+            _ = DeleteObject(hgdiobj);
+        }
+        _ = user32.DestroyWindow(self.hwnd);
     }
     
 };
@@ -172,7 +244,7 @@ fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lP
     var event: EventData = switch (uMsg)
     {
         user32.WM_KEYDOWN => EventData { .keydown = Key.escape }, // TODO extend
-        user32.WM_PAINT => EventData { .unknown = undefined },
+        user32.WM_PAINT => EventData { .paint = undefined },
         user32.WM_CLOSE => EventData { .closewindow = undefined },
         user32.WM_MOUSEMOVE => EventData { 
             .pointermove = common.Position {

@@ -1,5 +1,5 @@
 // x11 support library
-
+const std = @import("std");
 const common = @import("./common.zig");
 
 const EventData = common.EventData;
@@ -10,6 +10,8 @@ pub const x = @cImport({
     @cInclude("xcb/xcb_image.h");
     @cInclude("stdlib.h");
 });
+
+pub const X11WindowInitOptions = common.WindowCreateOptions;
 
 pub const X11Connection = struct {
     conn: ?*x.xcb_connection_t,
@@ -90,8 +92,6 @@ pub const X11Connection = struct {
 
 };
 
-pub const X11WindowInitOptions = common.WindowCreateOptions;
-
 pub const X11Window = struct {
     win: u32,
     xc: *X11Connection,
@@ -116,9 +116,8 @@ pub const X11Window = struct {
             10,
             x.XCB_WINDOW_CLASS_INPUT_OUTPUT,
             screen.*.root_visual,
-            x.XCB_CW_BACK_PIXEL | x.XCB_CW_EVENT_MASK,
+            x.XCB_CW_EVENT_MASK,
             &[_]u32{
-                screen.*.white_pixel,
                 x.XCB_EVENT_MASK_EXPOSURE | x.XCB_EVENT_MASK_BUTTON_PRESS |
                     x.XCB_EVENT_MASK_BUTTON_RELEASE | x.XCB_EVENT_MASK_POINTER_MOTION |
                     x.XCB_EVENT_MASK_ENTER_WINDOW | x.XCB_EVENT_MASK_LEAVE_WINDOW |
@@ -180,6 +179,15 @@ pub const X11Window = struct {
         _ = x.xcb_flush(c);
     }
 
+    pub fn presentCanvasU32BGRA(w: *X11Window, width: u16, height: u16, data: []u32) void {
+        var pixel_count: usize = @intCast(width);
+        pixel_count *= height;
+        var dataslice: []u8 = undefined;
+        dataslice.ptr = @as([*]u8, @ptrCast(data));
+        dataslice.len = pixel_count * 4;
+        w.presentCanvas(width, height, dataslice);
+    }
+
     pub fn deinit(w: *X11Window) void {
         _ = x.xcb_destroy_window(w.xc.conn, w.win);
     }
@@ -212,7 +220,7 @@ fn eventFrom(raw: x.xcb_generic_event_t) common.EventData {
             // const exposeEventPtr = @as([*c]ui.x11.x.xcb_expose_event_t, @ptrCast(eventPtr));
             // std.debug.print("expose {} {}\n", .{ exposeEventPtr.*.width, exposeEventPtr.*.height });
             // win.presentCanvas(width, height, data);
-            return EventData { .unknown = undefined };
+            return EventData { .paint = undefined };
         },
         x.XCB_KEY_PRESS => {
             const keyPress = @as([*c]const x.xcb_key_press_event_t, @ptrCast(&raw)).*;

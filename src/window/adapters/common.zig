@@ -6,6 +6,7 @@ pub const NextEventOptions = struct {
 
 pub const Event = enum {
     unknown,
+    paint,
     closewindow,
     keydown,
     resize,
@@ -19,6 +20,7 @@ pub const Key = enum {
 
 pub const EventData = union(Event) {
     unknown: void,
+    paint: void,
     closewindow: void,
     keydown: Key,
     resize: Size,

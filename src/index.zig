@@ -26,6 +26,10 @@ pub const Event = window.Event;
 pub const EventData = window.EventData;
 pub const Key = window.Key;
 
+pub fn presentCanvas32(w: Window, c: Canvas32) void {
+    w.presentCanvasU32BGRA(@intCast(c.width), @intCast(c.height), c.pixels);
+}
+
 test {
     _ = @import("./math/math.zig");
     _ = @import("./canvas/canvas.zig");
