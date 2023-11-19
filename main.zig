@@ -15,35 +15,43 @@ pub fn main() !void {
 
     var canvas = try Canvas.initAlloc(allocator, 1920, 1080);
     defer canvas.deinit();
-    canvas.clear(0xff202020);
-
-    var width: usize = 500;
-    var height: usize = 400;
-    var frame: usize = 0;
 
     var font = ui.loadInternalFont(allocator);
     defer font.deinit();
 
-    while (true) {
-        var x = (canvas.width - width) / 3;
-        var y = (canvas.height - height) / 3;
-        var t: f32 = @floatFromInt(frame);
-        t *= 1.0 / 24.0;
+    const window = ui.Window.init(.{
+        .title = "Text Example",
+        .width = @intCast(canvas.width),
+        .height = @intCast(canvas.height),
+    });
+    defer window.deinit();
 
-        canvas.clear(0xff202020);
-        try drawFrame(&canvas, &font, x, y, width, height);
-        try testFontRender(&canvas, &font);
-
-        try dumpToStdout(canvas);
-        frame += 1;
+    while (ui.nextEvent(.{ .blocking = true })) |evt| {
+        switch (evt) {
+            ui.Event.paint => {
+                var x: i16 = @intCast(canvas.width / 3);
+                var y: i16 = @intCast(canvas.height / 3);
+                canvas.clear(0xff202020);
+                try drawFrame(&canvas, &font, x, y, 500, 400);
+                try testFontRender(&canvas, &font);
+                ui.presentCanvas32(window, canvas);
+            },
+            ui.Event.keydown => |key| switch(key) {
+                ui.Key.escape => return,
+                else => {},
+            },
+            ui.Event.resize => |size| try canvas.reallocate(size.width, size.height),
+            ui.Event.closewindow => return,
+            else => {},
+        }
     }
 }
 
-fn drawFrame(canvas: *Canvas, font: *Font, x: usize, y: usize, width: usize, height: usize) !void {
+fn drawFrame(canvas: *Canvas, font: *Font, x: i16, y: i16, width: i16, height: i16) !void {
     canvas.rect(x - 1, y - 1, x + width + 1, y + height + 1, 0xff101010);
     canvas.rect(x, y, x + width, y + height, 0xff303030);
     canvas.rect(x, y + 32, x + width, y + height, 0xff282828);
-    try ui.drawText(canvas, font, 14, 0xff909090, x + width - 16 - 6, y + 16 - 11, "x");
+    try ui.drawText(canvas, font, 14, 0xff909090, @intCast(x + width - 16 - 6), @intCast(y + 16 - 11), "x");
 
     var bottom = y + height;
     var right = x + width;
@@ -51,10 +59,10 @@ fn drawFrame(canvas: *Canvas, font: *Font, x: usize, y: usize, width: usize, hei
     try drawButton(canvas, right - 80 - 16 - 80 - 8, bottom - 24 - 16, 80, 24, font, "Ok");
 }
 
-fn drawButton(canvas: *Canvas, x: usize, y: usize, width: usize, height: usize, font: *Font, text: []const u8) !void {
+fn drawButton(canvas: *Canvas, x: i16, y: i16, width: i16, height: i16, font: *Font, text: []const u8) !void {
     canvas.rect(x - 1, y - 1, x + width + 1, y + height + 1, 0xff202020);
     canvas.rect(x, y, x + width, y + height, 0xff303030);
-    try ui.drawText(canvas, font, 12, 0xff909090, x+width/2-text.len*9/2, y+2, text);
+    try ui.drawText(canvas, font, 12, 0xff909090, x+@divFloor(width-@as(i16, @intCast(text.len))*9,2), y+2, text);
 }
 
 fn testFontRender(canvas: *Canvas, font: *Font) !void

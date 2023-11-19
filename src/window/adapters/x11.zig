@@ -20,6 +20,8 @@ pub const X11Connection = struct {
     colormap: u32,
     wm_state: u32 = 0,
     wm_fullscreen: u32 = 0,
+    wm_delete_window: u32 = 0,
+    wm_protocols: u32 = 0,
 
     pub fn init() X11Connection {
         var c = x.xcb_connect(null, null);
@@ -43,22 +45,41 @@ pub const X11Connection = struct {
         // not the most efficient
         const cookie = x.xcb_intern_atom(self.conn, 1, @intCast(name.len), name.ptr);
         var err: [*c]x.xcb_generic_error_t = undefined;
-        const result = x.xcb_intern_atom_reply(self.conn, cookie, &err);
-        return result.*.atom;
+        const reply = x.xcb_intern_atom_reply(self.conn, cookie, &err);
+        if (reply == null) {
+            @panic("did not get reply");
+        }
+        const atom = reply.*.atom;
+        x.free(reply);
+        return atom;
     }
 
-    fn internAtomWmState(self: *X11Connection) x.xcb_atom_t {
+    fn getWmStateAtom(self: *X11Connection) x.xcb_atom_t {
         if (self.wm_state == 0) {
             self.wm_state = self.internAtom("_NET_WM_STATE");
         }
         return self.wm_state;
     }
 
-    fn internAtomWmFullscreen(self: *X11Connection) x.xcb_atom_t {
+    fn getWmFullscreenAtom(self: *X11Connection) x.xcb_atom_t {
         if (self.wm_fullscreen == 0) {
             self.wm_fullscreen = self.internAtom("_NET_WM_STATE_FULLSCREEN");
         }
         return self.wm_fullscreen;
+    }
+
+    fn getWmProtocolsAtom(self: *X11Connection) x.xcb_atom_t {
+        if (self.wm_protocols == 0) {
+            self.wm_protocols = self.internAtom("WM_PROTOCOLS");
+        }
+        return self.wm_protocols;
+    }
+
+    fn getWmDeleteWindowAtom(self: *X11Connection) x.xcb_atom_t {
+        if (self.wm_delete_window == 0) {
+            self.wm_delete_window = self.internAtom("WM_DELETE_WINDOW");
+        }
+        return self.wm_delete_window;
     }
 
     pub fn waitForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
@@ -83,7 +104,7 @@ pub const X11Connection = struct {
             raw_event = self.pollForEventRaw();
         }
         if (raw_event) |value| {
-            return eventFrom(value);
+            return eventFrom(value, self);
         }
         else {
             return null;
@@ -137,9 +158,17 @@ pub const X11Window = struct {
         };
         window.setTitle(opt.title);
         window.setFullscreen(opt.fullscreen);
+        window.enableCloseWindowProtocol();
         _ = x.xcb_map_window(c, win);
         _ = x.xcb_flush(c);
         return window;
+    }
+
+    fn enableCloseWindowProtocol(w: *X11Window) void
+    {
+        const wmProtocols = w.xc.getWmProtocolsAtom();
+        const wmDeleteWindow = w.xc.getWmDeleteWindowAtom();
+        _ = x.xcb_change_property(w.xc.conn, x.XCB_PROP_MODE_REPLACE, w.win, wmProtocols, x.XCB_ATOM_ATOM, 32, 1, &wmDeleteWindow );
     }
 
     pub fn setTitle(w: *X11Window, title: []const u8) void {
@@ -147,9 +176,9 @@ pub const X11Window = struct {
     }
 
     pub fn setFullscreen(w: *X11Window, fullscreen: bool) void {
-        const wm_state = w.xc.internAtomWmState();
+        const wm_state = w.xc.getWmStateAtom();
         if (fullscreen) {
-            const wm_fullscreen = w.xc.internAtomWmFullscreen();
+            const wm_fullscreen = w.xc.getWmFullscreenAtom();
             _ = x.xcb_change_property(w.xc.conn, x.XCB_PROP_MODE_REPLACE, w.win, wm_state, x.XCB_ATOM_ATOM, 32, 1, &wm_fullscreen);
         } else {
             _ = x.xcb_delete_property(w.xc.conn, w.win, wm_state);
@@ -205,8 +234,11 @@ pub const XWindow = struct {
 };
 
 
-fn eventFrom(raw: x.xcb_generic_event_t) common.EventData {
-    switch (raw.response_type) {
+fn eventFrom(raw: x.xcb_generic_event_t, conn: *X11Connection) common.EventData {
+    // most significant bit needs to be masked off from response_type before using
+    const _type = raw.response_type & 0x7f;
+    // now we can switch on event type
+    switch (_type) {
         x.XCB_CONFIGURE_NOTIFY => {
             const configureNotify = @as([*c]const x.xcb_configure_notify_event_t, @ptrCast(&raw)).*;
             return EventData { 
@@ -241,6 +273,14 @@ fn eventFrom(raw: x.xcb_generic_event_t) common.EventData {
             // const noExposure = noExposurePtr.*;
             // std.debug.print("no exposure {} \n", .{noExposure.major_opcode});
             return EventData { .unknown = undefined };
+        },
+        x.XCB_CLIENT_MESSAGE => {
+            const clientMessage = @as([*c]const x.xcb_client_message_event_t, @ptrCast(&raw)).*;
+            if( clientMessage.data.data32[0] == conn.getWmDeleteWindowAtom() ) {
+                return EventData { .closewindow = undefined };
+            } else {
+                return EventData { .unknown = undefined };
+            }
         },
         else => {
             // std.debug.print("event type {} not handled\n", .{event.response_type});

@@ -4,7 +4,9 @@ pub const Canvas32 = CanvasGeneric(u32);
 const font = @import("./canvas/font/font.zig");
 
 pub const Font = font.Font;
-pub const drawText = font.drawText;
+pub const drawTextV1 = font.drawTextV1;
+pub const drawTextV2 = font.drawTextV2;
+pub const drawText = drawTextV2;
 
 pub const loadInternalFont = font.initInternalFont;
 

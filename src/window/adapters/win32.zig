@@ -76,7 +76,7 @@ pub const Window = struct {
             user32.WS_OVERLAPPEDWINDOW,  // Window style
 
             // Size and position
-            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, 600, 400,
+            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, options.width, options.height,
 
             null,      // Parent window
             null,      // Menu

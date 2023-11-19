@@ -17,6 +17,13 @@ pub fn main() !void {
     var canvas = try Canvas.initAlloc(allocator, 1920, 1080);
     defer canvas.deinit();
 
+    const window = ui.Window.init(.{
+        .title = "Text Example",
+        .width = @intCast(canvas.width),
+        .height = @intCast(canvas.height),
+    });
+    defer window.deinit();
+
     const black = color(0, 0, 0, 255);
     canvas.clear(black);
     const backgroundColor = color(32, 32, 32, 255);
@@ -31,10 +38,20 @@ pub fn main() !void {
     const pointOutside = mixColor(mixColor(backgroundColor, red, 0.5), yellow, 0.25);
     const offWhite = mixColor(backgroundColor, white, 0.7);
 
-    var frame: u32 = 0;
 
-    while (true)
-    {
+    while (true) {
+
+        while (ui.nextEvent(.{ .blocking = false })) |evt| switch (evt) {
+            ui.Event.keydown => |key| switch(key) {
+                ui.Key.escape => return,
+                else => {},
+            },
+            ui.Event.resize => |size| try canvas.reallocate(size.width, size.height),
+            ui.Event.closewindow => return,
+            else => {},
+        };
+
+        var time: u32 = @intCast((std.time.milliTimestamp() >> 4) & 0xffffffff);
         var prng = std.rand.DefaultPrng.init(0);
         canvas.clear(black);
         for (0..14) |x| 
@@ -45,14 +62,14 @@ pub fn main() !void {
                 var py: u32 = @intCast(y*128+24);
 
                 var b0 = Box.initCoords(
-                    px + @as(u32, (prng.random().int(u32)+frame) % 128), 
+                    px + @as(u32, (prng.random().int(u32)+%time) % 128), 
                     py + @as(u32, prng.random().int(u32) % 128), 
                     px + @as(u32, prng.random().int(u32) % 128), 
                     py + @as(u32, prng.random().int(u32) % 128));
 
                 var b1 = Box.initCoords(
                     px + @as(u32, prng.random().int(u32) % 128), 
-                    py + @as(u32, (prng.random().int(u32)+frame) % 128), 
+                    py + @as(u32, (prng.random().int(u32)+%time) % 128), 
                     px + @as(u32, prng.random().int(u32) % 128), 
                     py + @as(u32, prng.random().int(u32) % 128));
 
@@ -65,15 +82,15 @@ pub fn main() !void {
                 if (b0.isInsideBox(b1)) b2c = offWhite;
                 if (b1.isInsideBox(b0)) b2c = offWhite;
 
-                canvas.rect(px+1, py+1, px+127, py+127, backgroundColor);
-                canvas.rect(b0.x0, b0.y0, b0.x1, b0.y1, b0c);
-                canvas.rect(b1.x0, b1.y0, b1.x1, b1.y1, b1c);
-                canvas.rect(b2.x0, b2.y0, b2.x1, b2.y1, b2c);
+                canvas.rectUnsigned(px+1, py+1, px+127, py+127, backgroundColor);
+                canvas.rectUnsigned(b0.x0, b0.y0, b0.x1, b0.y1, b0c);
+                canvas.rectUnsigned(b1.x0, b1.y0, b1.x1, b1.y1, b1c);
+                canvas.rectUnsigned(b2.x0, b2.y0, b2.x1, b2.y1, b2c);
 
                 for (0..256) |_|
                 {
-                    var qx = px + @as(u32, (prng.random().int(u32)-frame) % 128);
-                    var qy = py + @as(u32, (prng.random().int(u32)+frame) % 128);
+                    var qx = px + @as(u32, (prng.random().int(u32)-%time) % 128);
+                    var qy = py + @as(u32, (prng.random().int(u32)+%time) % 128);
                     var qc = pointOutside;
                     if (b0.containsPoint(qx, qy) or b1.containsPoint(qx, qy)) {
                         qc = backgroundColor;
@@ -81,10 +98,10 @@ pub fn main() !void {
                     canvas.setPixel(qx, qy, qc);
                 }
             }
+            std.time.sleep(1_000_000);
         }
-        try ui.dumpCanvasToStdout(canvas);
-        frame += 1;
+        // try ui.dumpCanvasToStdout(canvas);
+        ui.presentCanvas32(window, canvas);
     }
-
 
 }

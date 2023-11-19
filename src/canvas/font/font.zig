@@ -12,8 +12,16 @@ pub fn initInternalFont(allocator: std.mem.Allocator) Font {
     return Font.initLazyFromBitmap(allocator, internalFont);
 }
 
+/// 
 /// Draws text to canvas, it may allocate to cache additional font bitmaps
-pub fn drawText(canvas: *Canvas(u32), font: *Font, size: usize, color: u32, x: usize, y: usize, string: []const u8) !void {
+/// 
+/// Deprecated because:
+///  - no clipping is performed here
+///  - coordinates are signed 
+/// 
+/// > use drawTextV2, for better experience
+/// 
+pub fn drawTextV1(canvas: *Canvas(u32), font: *Font, size: usize, color: u32, x: usize, y: usize, string: []const u8) !void {
     var cursorX = x;
     var cursorY = y;
     // TODO optimize when colorAlpha == 255 or 0
@@ -38,6 +46,90 @@ pub fn drawText(canvas: *Canvas(u32), font: *Font, size: usize, color: u32, x: u
                 }
             }
             cursorX += texture.width;
+        }
+    }
+}
+
+/// Draws text to canvas, it may allocate to cache additional font bitmaps
+pub fn drawTextV2(dst: *Canvas(u32), font: *Font, size: usize, color: u32, x: i16, y: i16, string: []const u8) !void {
+    var cursorX = x;
+    var cursorY = y;
+    // TODO optimize when colorAlpha == 255 or 0
+    var colorAlpha = color32bgra.getAlpha(color);
+    var scaleset = try font.getOrAllocSizeCache(size);
+    
+    if (cursorY > dst.height) {
+        return; // first char start below canvas, drop all 
+    }
+
+    if (cursorX > dst.width) {
+        return; // first char is to the right of the canvas, drop all
+    }
+
+    for (string) |code| {
+        if (try scaleset.lazyGetGlyph(code)) |glyph|
+        {
+            const src = glyph.data;
+            const glyph_height: i16 = @intCast(glyph.data.height);
+            const glyph_width: i16 = @intCast(glyph.data.width);
+
+            if (cursorY + glyph_height <= 0) {
+                cursorX += glyph_width;
+                continue; // glypth completely outside canvas
+            }
+            if (cursorX + glyph_width <= 0) {
+                cursorX += glyph_width;
+                continue; // glypth completely outside canvas
+            }
+            if (cursorX > dst.width) {
+                return; // rest of the chars is to the right of the canvas, drop all
+            }
+
+            var dstY: usize = 0;
+            var srcFromY: usize = 0;
+            if (cursorY < 0) {
+                // partially outside top
+                srcFromY = @intCast(-cursorY); 
+            } else {
+                dstY = @intCast(cursorY);
+            }
+            var srcToY = src.height;
+            if (srcToY + dstY >= dst.height) {
+                // partially outside bottom
+                srcToY = srcToY + dst.height - srcToY - dstY;
+            }
+            for (srcFromY..srcToY) |srcY| {
+                var srcRow = src.getRow(srcY);
+                var dstRow = dst.getRow(dstY);
+                var dstX: usize = 0;
+                var srcFromX: usize = 0;
+                if (cursorX < 0) {
+                    // partially outside left
+                    srcFromX = @intCast(-cursorX);
+                }
+                else {
+                    dstX = @intCast(cursorX);
+                }
+                var srcToX = src.width;
+                var dstToX = dstX + (srcToX - srcFromX);
+                if (dstToX >= dst.width){
+                    // partially outside right
+                    var adjust = dstToX - dst.width;
+                    srcToX -= adjust;
+                    dstToX = dst.width;
+                }
+                for (srcFromX..srcToX) |srcX| {
+                    var dstPixel = dstRow[dstX];
+
+                    var alpha = srcRow[srcX];
+                    var blend = math.lerp8bit(0, alpha, colorAlpha);
+
+                    dstRow[dstX] = color32bgra.mixByU8(dstPixel, color, blend);
+                    dstX += 1;
+                }
+                dstY += 1;
+            }
+            cursorX += @intCast(src.width);
         }
     }
 }
@@ -205,11 +297,34 @@ pub const internalFont = FontData {
     .chunks = &[_]FontDataChunk { internalFontChunk },
 };
 
-test "basic font drawing test" {
+test "basic font drawing test drawTextV1" {
     const allocator = std.testing.allocator;
     var output = try Canvas(u32).initAlloc(allocator, 256, 256);
     defer output.deinit();
     var font = initInternalFont(std.testing.allocator);
     defer font.deinit();
-    try drawText(&output, &font, 14, color32bgra.white, 0, 0, "a");
+    try drawTextV1(&output, &font, 14, color32bgra.white, 0, 0, "a");
+}
+
+test "clipping with drawTextV2" {
+    const allocator = std.testing.allocator;
+    var output = try Canvas(u32).initAlloc(allocator, 256, 256);
+    defer output.deinit();
+    var font = initInternalFont(std.testing.allocator);
+    defer font.deinit();
+    var color = color32bgra.white;
+    // outside Y range
+    try drawTextV2(&output, &font, 14, color, 0, 512, "a");
+    try drawTextV2(&output, &font, 14, color, 0, -512, "a");
+    // outside X range
+    try drawTextV2(&output, &font, 14, color, 512, 0, "a");
+    try drawTextV2(&output, &font, 14, color, -512, 0, "a");
+
+    // partially outside all sides
+    var m: i16 = 4;
+    var txt = "abc";
+    try drawTextV2(&output, &font, 14, color, 0, -m, txt);
+    try drawTextV2(&output, &font, 14, color, -m, 0, txt);
+    try drawTextV2(&output, &font, 14, color, 256-m, 0, txt);
+    try drawTextV2(&output, &font, 14, color, 0, 256-m, txt);
 }
