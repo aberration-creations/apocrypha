@@ -194,43 +194,66 @@ pub fn processMessagesUntilQuit() void
 /// get next event from caller thread's message queue 
 /// expected to be called from the main 'GUI' thread
 pub fn nextEvent(options: common.NextEventOptions) ?EventData {
-    if (static_event_queue_head != static_event_queue_tail) {
-        const result = static_event_queue[static_event_queue_head];
-        static_event_queue_head = static_event_queue_head +% 1;
-        return result;
+    if (getEventFromStaticQueue()) |event| {
+        return event;
     }
+    var hadRawMessage = false;
     if (options.blocking) {
-        getMessageRaw();
+        hadRawMessage = getRawMessage();
     }
     else {
-        peekMessageRaw();
+        hadRawMessage = peekRawMessage();
     }
+    if (getEventFromStaticQueue()) |event| {
+        return event;
+    }
+    else if (hadRawMessage) {
+        return EventData { .unknown = undefined };
+    }
+    else 
+    {
+        return null;
+    }
+}
+
+inline fn getEventFromStaticQueue() ?EventData {
     if (static_event_queue_head != static_event_queue_tail) {
         const result = static_event_queue[static_event_queue_head];
         static_event_queue_head = static_event_queue_head +% 1;
         return result;
-    } 
+    }
     else {
         return null;
     }
 }
 
 /// get next message from thread's message queue
-pub fn getMessageRaw() void
+pub fn getRawMessage() bool
 {
     var msg: user32.MSG = undefined;
     if (user32.GetMessageA(&msg, null, 0, 0) > 0)
     {
         handleMessage(&msg);
+        return true;
+    }
+    else 
+    {
+        return false;
     }
 }
 
 /// peek next message from thread's message queue
-pub fn peekMessageRaw() void{
+pub fn peekRawMessage() bool 
+{
     var msg: user32.MSG = undefined;
     if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0)
     {
         handleMessage(&msg);
+        return true;
+    }
+    else 
+    {
+        return false;
     }
 }
 
