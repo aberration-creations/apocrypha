@@ -21,6 +21,9 @@ const HGDIOBJ = *opaque {};
 const HDC = win32.HDC;
 const HWND = win32.HWND;
 
+const SM_CXSCREEN = 0;
+const SM_CYSCREEN = 1;
+
 // GDI constants
 const SRCCOPY: DWORD = 0x00CC0020;
 
@@ -30,6 +33,7 @@ const IDC_ARROW = 32512;
 extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
 extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
+extern "user32" fn GetSystemMetrics(nIndex: i32) i32;
 
 extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque{}) HGDIOBJ;
 extern "gdi32" fn CreateCompatibleDC(hdc: HDC) HDC;
@@ -69,14 +73,25 @@ pub const Window = struct {
         @memcpy(titleBuffer[0..options.title.len], options.title);
         titleBuffer[options.title.len] = 0;
 
+        var style: DWORD = user32.WS_OVERLAPPEDWINDOW;
+        var width: i32 = @intCast(options.width);
+        var height: i32 = @intCast(options.height);
+
+
+        if (options.fullscreen) {
+            style = user32.WS_POPUP | user32.WS_VISIBLE;
+            width = GetSystemMetrics(SM_CXSCREEN);
+            height = GetSystemMetrics(SM_CXSCREEN);
+        }
+
         if (user32.CreateWindowExA(
             0,                    // Optional window styles.
             className,            // Window class
             @ptrCast(&titleBuffer), // Window text
-            user32.WS_OVERLAPPEDWINDOW,  // Window style
+            style,  // Window style
 
             // Size and position
-            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, options.width, options.height,
+            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, width, height,
 
             null,      // Parent window
             null,      // Menu
