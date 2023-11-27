@@ -98,7 +98,7 @@ pub fn main() !void {
                     canvas.setPixel(qx, qy, qc);
                 }
             }
-            std.time.sleep(1_000_000);
+            std.time.sleep(1);
         }
         // try ui.dumpCanvasToStdout(canvas);
         ui.presentCanvas32(window, canvas);

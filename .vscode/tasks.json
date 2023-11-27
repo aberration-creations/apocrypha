@@ -4,45 +4,51 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "main linux",
+            "label": "internalfont",
             "type": "shell",
-            "command": "clear && zig run main.zig -lc -lxcb -lxcb-image",
+            "command": "clear && zig run internalfont.zig",
             "problemMatcher": []
         },
         {
-            "label": "mainIntersection linux",
+            "label": "rectangles",
             "type": "shell",
-            "command": "clear && zig run mainIntersection.zig -lc -lxcb -lxcb-image",
+            "command": "clear && zig run rectangles.zig",
             "problemMatcher": []
         },
         {
-            "label": "mainIntersection wine",
+            "label": "internalfont linux",
             "type": "shell",
-            "command": "clear && zig build-exe mainIntersection.zig -target x86_64-windows && wine mainIntersection.exe && rm mainIntersection.exe mainIntersection.exe.obj mainIntersection.pdb",
+            "command": "clear && zig run internalfont.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
         },
         {
-            "label": "x11",
+            "label": "rectangles linux",
             "type": "shell",
-            "command": "clear && zig run x11.zig -lc -lxcb -lxcb-image",
+            "command": "clear && zig run rectangles.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
         },
         {
-            "label": "window",
+            "label": "rectangles wine",
             "type": "shell",
-            "command": "clear && zig run window.zig",
+            "command": "clear && zig build-exe rectangles.zig -target x86_64-windows && wine mainIntersection.exe && rm mainIntersection.exe mainIntersection.exe.obj mainIntersection.pdb",
             "problemMatcher": []
         },
         {
-            "label": "window linux",
+            "label": "xortexture",
             "type": "shell",
-            "command": "clear && zig run window.zig -lc -lxcb -lxcb-image",
+            "command": "clear && zig run xortexture.zig",
             "problemMatcher": []
         },
         {
-            "label": "window wine",
+            "label": "xortexture linux",
             "type": "shell",
-            "command": "clear && zig build-exe window.zig -target x86_64-windows && wine window.exe && rm window.exe window.exe.obj window.pdb",
+            "command": "clear && zig run xortexture.zig -lc -lxcb -lxcb-image",
+            "problemMatcher": []
+        },
+        {
+            "label": "xortexture wine",
+            "type": "shell",
+            "command": "clear && zig build-exe xortexture.zig -target x86_64-windows && wine window.exe && rm xortexture.exe xortexture.exe.obj xortexture.pdb",
             "problemMatcher": []
         },
         {

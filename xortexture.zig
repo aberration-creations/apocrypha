@@ -23,18 +23,17 @@ pub fn main() !void {
 
     while (ui.nextEvent(.{ .blocking = true })) |evt| {
         switch (evt) {
-            ui.Event.paint => {
-                frame += 1;
-                renderXorTextureToCanvas(canvas, frame);
-                ui.presentCanvas32(window, canvas);
-            },
             ui.Event.keydown => |key| switch(key) {
                 ui.Key.escape => return,
                 else => {},
             },
             ui.Event.resize => |size| try canvas.reallocate(size.width, size.height),
             ui.Event.closewindow => return,
-            else => {},
+            else => {
+                frame += 1;
+                renderXorTextureToCanvas(canvas, frame);
+                ui.presentCanvas32(window, canvas);
+            },
         }
     }
 
