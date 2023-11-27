@@ -46,6 +46,12 @@
             "problemMatcher": []
         },
         {
+            "label": "pathtracer",
+            "type": "shell",
+            "command": "clear && zig run pathtracer.zig",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",
