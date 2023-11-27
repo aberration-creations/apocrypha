@@ -258,6 +258,10 @@ fn eventFrom(raw: x.xcb_generic_event_t, conn: *X11Connection) common.EventData 
             const keyPress = @as([*c]const x.xcb_key_press_event_t, @ptrCast(&raw)).*;
             return EventData { .keydown = switch (keyPress.detail) {
                 9 => .escape,
+                111 => .up,
+                113 => .left,
+                116 => .down,
+                114 => .right,
                 else => .unknown,
             }};
         },

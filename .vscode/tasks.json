@@ -58,6 +58,18 @@
             "problemMatcher": []
         },
         {
+            "label": "pathtracer linux",
+            "type": "shell",
+            "command": "clear && zig run pathtracer.zig -lc -lxcb -lxcb-image",
+            "problemMatcher": []
+        },
+        {
+            "label": "2048 linux",
+            "type": "shell",
+            "command": "clear && zig run 2048.zig -lc -lxcb -lxcb-image",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",

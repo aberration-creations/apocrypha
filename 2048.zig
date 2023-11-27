@@ -1,0 +1,298 @@
+const std = @import("std");
+const ui = @import("./src/index.zig");
+var rand = std.rand.DefaultPrng.init(0);
+
+const Cell = struct {
+    value: u16 = 0,
+    spawn_t: f32 = 0,
+    grow_t: f32 = 1,
+    in_x_t: f32 = 0,
+    in_y_t: f32 = 0,
+};
+
+var window: ui.Window = undefined;
+var canvas: ui.Canvas32 = undefined;
+var font: ui.Font = undefined;
+var game: [4][4]Cell = .{ .{ .{} } ** 4 } ** 4;
+var is_animating = false;
+var last_render_ms: i64 = 0;
+var score: usize = 0;
+var score_delta: usize = 0;
+var score_delta_t: f32 = 1;
+
+pub fn main() !void {
+    
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer {
+        const deinit_status = gpa.deinit();
+        if (deinit_status == .leak) @panic("MEMORY LEAK");
+    }
+
+    canvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
+    defer canvas.deinit();
+    
+    window = ui.Window.init(.{
+        .title = "2048 Game",
+        .width = @intCast(canvas.width),
+        .height = @intCast(canvas.height),
+    });
+    defer window.deinit();
+
+    font = ui.loadInternalFont(allocator);
+    defer font.deinit();
+
+
+    addRandomValue();
+
+    while (true) {
+        while (ui.nextEvent(.{ .blocking = !is_animating })) |evt| {
+            switch (evt) {
+                .paint => {
+                    try render();
+                },
+                .keydown => |key| switch(key) {
+                    .escape => return,
+                    .up => try move(0, -1),
+                    .left => try move(-1, 0),
+                    .right => try move(1, 0),
+                    .down => try move(0, 1),
+                    else => {},
+                },
+                .resize => |size| try canvas.reallocate(size.width, size.height),
+                .closewindow => return,
+                else => {},
+            }
+        }
+        if (is_animating)
+        {
+            try render();
+            std.time.sleep(1);
+        }
+    }
+
+}
+
+fn move(mx: i32, my: i32) !void
+{
+    var moved = false;
+    var merge_score: usize = 0;
+
+    for (0..4) |i| {
+        _ = i;
+        for (0..4) |from_x| {
+            var to_x = @as(i32, @intCast(from_x)) + mx;
+            if (to_x < 0 or to_x >= 4) {
+                continue;
+            }
+            for (0..4) |from_y| {
+                var to_y = @as(i32, @intCast(from_y)) + my;
+                if (to_y < 0 or to_y >= 4) {
+                    continue;
+                }
+                const tx: usize = @intCast(to_x);
+                const ty: usize = @intCast(to_y);
+
+                if (game[from_x][from_y].value == game[tx][ty].value) {
+                    game[tx][ty].value += game[from_x][from_y].value;
+                    game[tx][ty].grow_t = 0; 
+                    game[tx][ty].spawn_t = 1;
+                    game[from_x][from_y] = Cell{};
+                    merge_score += game[tx][ty].value;
+                    moved = true;
+                }
+                else if (game[tx][ty].value == 0)
+                {
+                    game[tx][ty].in_x_t = game[from_x][from_y].in_x_t + @as(f32, @floatFromInt(-mx));
+                    game[tx][ty].in_y_t = game[from_x][from_y].in_y_t + @as(f32,@floatFromInt(-my));
+                    game[tx][ty].value = game[from_x][from_y].value;
+                    game[tx][ty].grow_t = game[from_x][from_y].grow_t;
+                    game[tx][ty].spawn_t = game[from_x][from_y].spawn_t;
+                    game[from_x][from_y] = Cell{};
+                    moved = true;
+                }
+            }
+        }
+    }
+
+    if (merge_score > 0)
+    {
+        score_delta = merge_score;
+        score_delta_t = 0;
+        score += score_delta;
+    }
+
+    if (moved){
+        addRandomValue();
+    }
+
+    is_animating = true;
+}
+
+fn render() !void {
+
+    const now = std.time.milliTimestamp();
+    var dt: f32 = 0;
+    if (is_animating)
+    {
+        dt = @floatFromInt(now - last_render_ms);
+        dt /= 1000;
+    }
+    last_render_ms = now;
+    score_delta_t += dt;
+
+    is_animating = false; // may prove to be wrong
+
+    const color_background = 0xff202020;
+    const color_empty = 0xff303030;
+    const white = 0xffffffff;
+    canvas.clear(color_background);
+
+    var buffer: [32]u8 = undefined;
+
+    const size: i32 = 80;
+    const gap: i32 = 16;
+    const size_and_gap: i32 = size + gap;
+    const margin_x: i32 = @divFloor(@as(i32, @intCast(canvas.width)) - 4*size-3*gap, 2);
+    const margin_y: i32 = @divFloor(@as(i32, @intCast(canvas.height)) - 4*size-3*gap, 2);
+
+    for (0..4) |ux| {
+        for (0..4) |uy| {
+            const x: i32 = @intCast(ux);
+            const y: i32 = @intCast(uy);
+            var x0 = margin_x + x * size_and_gap;
+            var y0 = margin_y + y * size_and_gap;
+            var x1 = x0 + size;
+            var y1 = y0 + size;
+            canvas.rect(x0, y0, x1, y1, color_empty);
+        }
+    }
+
+    for (0..4) |ux| {
+        for (0..4) |uy| {
+            const x: i32 = @intCast(ux);
+            const y: i32 = @intCast(uy);
+            var x0 = margin_x + x * size_and_gap;
+            var y0 = margin_y + y * size_and_gap;
+            var x1 = x0 + size;
+            var y1 = y0 + size;
+            var c = &game[ux][uy];
+            const movespeed = 20;
+            if (c.in_x_t > 0) {
+                is_animating = true;
+                c.in_x_t -= dt*movespeed;
+                if (c.in_x_t < 0) {
+                    c.in_x_t = 0;
+                }
+            }
+            else if (c.in_x_t < 0) {
+                is_animating = true;
+                c.in_x_t += dt*movespeed;
+                if (c.in_x_t >= 0) {
+                    c.in_x_t = 0;
+                }
+            }
+            if (c.in_y_t > 0) {
+                is_animating = true;
+                c.in_y_t -= dt*movespeed;
+                if (c.in_y_t < 0) {
+                    c.in_y_t = 0;
+                }
+            }
+            else if (c.in_y_t < 0) {
+                is_animating = true;
+                c.in_y_t += dt*movespeed;
+                if (c.in_y_t >= 0) {
+                    c.in_y_t = 0;
+                }
+            }
+            c.grow_t += dt;
+            if (c.grow_t > 1){
+                c.grow_t = 1;
+            } else {
+                is_animating = true;
+            }
+            var cell_t = game[ux][uy].spawn_t + dt;
+            if (cell_t > 1) {
+                cell_t = 1;
+            } else {
+                is_animating = true;
+            }
+            game[ux][uy].spawn_t = cell_t;
+            const cell = game[ux][uy];
+
+            if (cell.value > 0)
+            {
+                var bg_color = getColorByValue(cell.value);
+                var s: i32 = @intFromFloat(32-cell_t*128);
+                x0 += @intFromFloat(cell.in_x_t * 96);
+                y0 += @intFromFloat(cell.in_y_t * 96);
+                x1 += @intFromFloat(cell.in_x_t * 96);
+                y1 += @intFromFloat(cell.in_y_t * 96);
+                if (s < 0) s = 0;
+                s += @intFromFloat(@max(0,(1-(c.grow_t*c.grow_t)*8))*-16);
+                canvas.rect(x0+s, y0+s, x1-s, y1-s, bg_color);
+                const str = try std.fmt.bufPrint(&buffer, "{}", .{ cell.value });
+                var tx = @as(i16, @intCast(x0)) + 32+8;
+                var ty = @as(i16, @intCast(y0)) + 14+8;
+                tx -= @intCast(str.len * 10);
+                const font_color = ui.color32bgra.mixColor32bgraByFloat(0x00ffffff, white, cell_t*2);
+                try ui.drawTextV2(&canvas, &font, 24, font_color, tx, ty, str);
+            }
+        }
+    }
+
+    const str = try std.fmt.bufPrint(&buffer, "score {}", .{ score });
+    const score_x0: i16 = @intCast(margin_x);
+    const score_y0: i16 = @intCast(margin_y - 48);
+    try ui.drawTextV2(&canvas, &font, 24, white, score_x0, score_y0, str);
+
+    if (score_delta_t > 1) {
+        score_delta_t = 1;
+    } else {
+        is_animating = true;
+    }
+    
+
+    const str2 = try std.fmt.bufPrint(&buffer, "+{}", .{ score_delta });
+    const anim_color = ui.color32bgra.mixColor32bgraByFloat(0xf080c020, 0x00ff00, score_delta_t);
+    const anim_sx = score_x0 + @as(i16, @intCast(str.len*20));
+    const anim_sy = score_y0 + @as(i16, @intFromFloat(score_delta_t*score_delta_t*-50));
+    try ui.drawTextV2(&canvas, &font, 24, anim_color, anim_sx, anim_sy, str2);
+
+    ui.presentCanvas32(window, canvas);
+}
+
+fn addRandomValue() void {
+    for (0..10) |i| {
+        _ = i;
+        var rx = rand.next() % 4;
+        var ry = rand.next() % 4;
+        if (game[rx][ry].value == 0)
+        {
+            game[rx][ry].value = 2;
+            game[rx][ry].spawn_t = 0;
+            game[rx][ry].grow_t = 1;
+            return;
+        }
+    }
+}
+
+fn getColorByValue(value: u16) u32
+{
+    return switch (value) {
+        0 => 0xff303030,
+        2 => 0xff3050b0,
+        4 => 0xff3080b0,
+        8 => 0xff303060,
+        16 => 0xff309070,
+        32 => 0xff709030,
+        64 => 0xffb09030,
+        128 => 0xffb06030,
+        256 => 0xffb02030,
+        512 => 0xffb02060,
+        1024 => 0xffb02090,
+        2048 => 0xff9020b0,
+        else => 0xff708030,
+    };
+}

@@ -16,6 +16,10 @@ pub const Event = enum {
 pub const Key = enum {
     unknown,
     escape,
+    up,
+    left,
+    down,
+    right
 };
 
 pub const EventData = union(Event) {
