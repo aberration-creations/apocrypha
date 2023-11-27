@@ -79,9 +79,9 @@ pub const Window = struct {
 
 
         if (options.fullscreen) {
-            style = user32.WS_POPUP | user32.WS_VISIBLE;
+            style = user32.WS_POPUP;
             width = GetSystemMetrics(SM_CXSCREEN);
-            height = GetSystemMetrics(SM_CXSCREEN);
+            height = GetSystemMetrics(SM_CYSCREEN);
         }
 
         if (user32.CreateWindowExA(
