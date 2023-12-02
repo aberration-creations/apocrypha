@@ -68,7 +68,7 @@ pub const Window = struct {
         switch (subsystem) {
             .linux => x11W[self.handle].presentCanvasU32BGRA(width, height, data),
             .windows => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
-            else => @compileError("not supported")
+            else => @compileError("not supported") 
         }
     }
 

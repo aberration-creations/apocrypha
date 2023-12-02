@@ -42,7 +42,7 @@ pub fn main() !void {
     font = ui.loadInternalFont(allocator);
     defer font.deinit();
 
-
+    addRandomValue();
     addRandomValue();
 
     while (true) {
@@ -73,60 +73,117 @@ pub fn main() !void {
 
 }
 
-fn move(mx: i32, my: i32) !void
+fn move(dir_x: i32, dir_y: i32) !void
 {
     var moved = false;
     var merge_score: usize = 0;
 
-    for (0..4) |i| {
-        _ = i;
-        for (0..4) |from_x| {
-            var to_x = @as(i32, @intCast(from_x)) + mx;
-            if (to_x < 0 or to_x >= 4) {
-                continue;
-            }
-            for (0..4) |from_y| {
-                var to_y = @as(i32, @intCast(from_y)) + my;
-                if (to_y < 0 or to_y >= 4) {
-                    continue;
-                }
-                const tx: usize = @intCast(to_x);
-                const ty: usize = @intCast(to_y);
+    for (0..4) |x| {
+        for (0..4) |y| {
+            
+            var from_x = x;
+            var from_y = y;
 
-                if (game[from_x][from_y].value == game[tx][ty].value) {
-                    game[tx][ty].value += game[from_x][from_y].value;
-                    game[tx][ty].grow_t = 0; 
-                    game[tx][ty].spawn_t = 1;
-                    game[from_x][from_y] = Cell{};
-                    merge_score += game[tx][ty].value;
-                    moved = true;
-                }
-                else if (game[tx][ty].value == 0)
-                {
-                    game[tx][ty].in_x_t = game[from_x][from_y].in_x_t + @as(f32, @floatFromInt(-mx));
-                    game[tx][ty].in_y_t = game[from_x][from_y].in_y_t + @as(f32,@floatFromInt(-my));
-                    game[tx][ty].value = game[from_x][from_y].value;
-                    game[tx][ty].grow_t = game[from_x][from_y].grow_t;
-                    game[tx][ty].spawn_t = game[from_x][from_y].spawn_t;
-                    game[from_x][from_y] = Cell{};
-                    moved = true;
-                }
+            if (dir_x > 0) from_x = 3 - from_x;
+            if (dir_y > 0) from_y = 3 - from_y;
+
+            const result = moveCell(from_x, from_y, dir_x, dir_y);
+
+            if (result.moved) {
+                moved = true;
+                merge_score += result.score;
             }
         }
     }
 
-    if (merge_score > 0)
-    {
-        score_delta = merge_score;
-        score_delta_t = 0;
-        score += score_delta;
-    }
-
-    if (moved){
+    if (moved) {
         addRandomValue();
+
+        if (merge_score > 0)
+        {
+            score_delta = merge_score;
+            score_delta_t = 0;
+            score += score_delta;
+        }
     }
 
     is_animating = true;
+}
+
+fn moveCell(x: usize, y: usize, dx: i32, dy: i32) struct { moved: bool, score: usize = 0 } {
+
+    var i_from_x: i32 = @intCast(x);
+    var i_from_y: i32 = @intCast(y);
+    var to_x = x;
+    var to_y = y;
+    var cell_from = &game[x][y];
+
+    if (cell_from.value == 0) 
+    {
+        return .{ .moved = false };
+    }
+
+    for (1..4) |i| {
+        var signed_i: i32 = @intCast(i);
+        var nx = dx * signed_i + i_from_x;
+        var ny = dy * signed_i + i_from_y;
+
+        if (nx < 0 or ny < 0 or nx > 3 or ny > 3)
+        {
+            break; // move blocked by grid edge
+        }
+
+        var unx: usize = @intCast(nx);
+        var uny: usize = @intCast(ny);
+
+        if (game[unx][uny].value == 0) 
+        {
+            to_x = unx;
+            to_y = uny;
+            continue; // move over empty
+        }
+        else if (game[unx][uny].value == cell_from.value)
+        {
+            to_x = unx;
+            to_y = uny;
+            break; // merge with same value
+        }
+        else 
+        {
+            break; // move blocked by block of different value
+        }
+    }
+
+    if (to_x == x and to_y == y)
+    {
+        return .{ .moved = false }; // no move
+    }
+
+    var cell_to = &game[to_x][to_y];
+    
+    if (cell_from.value == cell_to.value) {
+        // merge
+        cell_to.value += cell_from.value;
+        cell_to.grow_t = 0; 
+        cell_to.spawn_t = 1;
+        cell_from.* = Cell{};
+        return .{ .moved = true, .score = cell_to.value };
+    }
+    else if (cell_to.value == 0)
+    {
+        // move
+        cell_to.in_x_t = cell_from.in_x_t + @as(f32, @floatFromInt(-dx));
+        cell_to.in_y_t = cell_from.in_y_t + @as(f32,@floatFromInt(-dy));
+        cell_to.value = cell_from.value;
+        cell_to.grow_t = cell_from.grow_t;
+        cell_to.spawn_t = cell_from.spawn_t;
+        cell_from.* = Cell{};
+        return .{ .moved = true };
+    }
+    else 
+    {
+        return .{ .moved = false };
+    }
 }
 
 fn render() !void {
@@ -264,15 +321,20 @@ fn render() !void {
 }
 
 fn addRandomValue() void {
-    for (0..10) |i| {
+    for (0..100) |i| {
         _ = i;
         var rx = rand.next() % 4;
         var ry = rand.next() % 4;
         if (game[rx][ry].value == 0)
-        {
-            game[rx][ry].value = 2;
-            game[rx][ry].spawn_t = 0;
-            game[rx][ry].grow_t = 1;
+        {   
+            var value: u16 = 2;
+            if (rand.next() % 6 == 0) {
+                value = 4;
+            }
+            var cell = &game[rx][ry];
+            cell.value = value;
+            cell.spawn_t = 0;
+            cell.grow_t = 1;
             return;
         }
     }

@@ -70,6 +70,12 @@
             "problemMatcher": []
         },
         {
+            "label": "2048",
+            "type": "shell",
+            "command": "clear && zig run 2048.zig",
+            "problemMatcher": []
+        },
+        {
             "label": "test",
             "type": "shell",
             "command": "clear && zig test src/index.zig",
