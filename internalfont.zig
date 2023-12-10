@@ -62,7 +62,7 @@ fn drawFrame(canvas: *Canvas, font: *Font, x: i16, y: i16, width: i16, height: i
 fn drawButton(canvas: *Canvas, x: i16, y: i16, width: i16, height: i16, font: *Font, text: []const u8) !void {
     canvas.rect(x - 1, y - 1, x + width + 1, y + height + 1, 0xff202020);
     canvas.rect(x, y, x + width, y + height, 0xff303030);
-    try ui.drawText(canvas, font, 12, 0xff909090, x+@divFloor(width-@as(i16, @intCast(text.len))*9,2), y+2, text);
+    try ui.drawCenteredTextSpan(canvas, font, 12, 0xff909090, x, y, x+width, y+height, text);
 }
 
 fn testFontRender(canvas: *Canvas, font: *Font) !void
