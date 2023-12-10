@@ -7,6 +7,8 @@ pub const Font = font.Font;
 pub const drawTextV1 = font.drawTextV1;
 pub const drawTextV2 = font.drawTextV2;
 pub const drawText = drawTextV2;
+pub const drawCenteredTextSpan = font.drawCenteredTextSpan;
+pub const measureTextSpanWidth = font.measureTextSpanWidth;
 
 pub const loadInternalFont = font.initInternalFont;
 

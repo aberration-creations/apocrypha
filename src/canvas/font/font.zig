@@ -134,6 +134,31 @@ pub fn drawTextV2(dst: *Canvas(u32), font: *Font, size: usize, color: u32, x: i1
     }
 }
 
+pub fn measureTextSpanWidth(font: *Font, size: i16, string: []const u8) !i16 {
+    var width: usize = 0;
+    var scaleset = try font.getOrAllocSizeCache(@intCast(size));
+    for (string) |code| {
+        if (try scaleset.lazyGetGlyph(code)) |glyph|
+        {
+            width += glyph.data.width;
+        }
+    }
+    return @intCast(width);
+}
+
+pub fn drawCenteredTextSpan(
+    dst: *Canvas(u32), font: *Font, size: i16, color: u32, 
+    x0: i16, y0: i16, x1: i16, y1: i16, string: []const u8
+) !void {
+    const measured_width = try measureTextSpanWidth(font, size, string);
+    const width = x1 - x0;
+    const height = y1 - y0;
+    const scaleset = try font.getOrAllocSizeCache(@intCast(size));
+    const aligned_x = x0 + @divTrunc(width - measured_width, 2);
+    const aligned_y = y0 + @divTrunc(height + scaleset.capheight, 2) - scaleset.baseline;
+    try drawTextV2(dst, font, @intCast(size), color, aligned_x, aligned_y, string);
+}
+
 pub const FontDataChunk = struct {
     texture: Texture(u8),
     gridCellWidth: u32,
@@ -158,6 +183,10 @@ pub const FontData = struct {
     chunks: [] const FontDataChunk,
     size: usize,
     weight: usize,
+    baseline: i16,
+    xheight: i16,
+    lineheight: i16,
+    capheight: i16,
     italic: bool,
 
     fn findChunk(font: Self, code: usize) ?FontDataChunk
@@ -208,15 +237,33 @@ pub const Font = struct {
 
 pub const FontSizeCacheMap = struct {
     size: usize, 
+    baseline: i16,
+    capheight: i16,
+    xheight: i16,
+    lineheight: i16,
     font: *Font,
     map: [256]?Glyph = .{ null } ** 256,
     bitmap: [256]bool = .{ false } ** 256,
 
     fn init(font: *Font, newsize: usize) FontSizeCacheMap
     {
+        const i_newsize: i32 = @intCast(newsize);
+        const o_size: i32 = @intCast(font.source.size);
+        const o_basline: i32 = font.source.baseline;
+        const o_xheight: i32 = font.source.xheight;
+        const o_capheight: i32 = font.source.capheight;
+        const o_lineheight: i32 = font.source.lineheight;
+        const s_baseline = @divTrunc(o_basline * i_newsize, o_size);
+        const s_xheight = @divTrunc(o_xheight * i_newsize, o_size);
+        const s_capheight = @divTrunc(o_capheight * i_newsize, o_size);
+        const s_lineheight = @divTrunc(o_lineheight * i_newsize, o_size);
         return FontSizeCacheMap {
             .font = font,
             .size = newsize,
+            .baseline = @intCast(s_baseline),
+            .xheight = @intCast(s_xheight),
+            .capheight = @intCast(s_capheight),
+            .lineheight = @intCast(s_lineheight),
         };
     }
 
@@ -293,6 +340,10 @@ const internalFontChunk = FontDataChunk {
 pub const internalFont = FontData {
     .size = 24,
     .weight = 800,
+    .baseline = 27,
+    .capheight = 17,
+    .xheight = 13,
+    .lineheight = 32,
     .italic = true,
     .chunks = &[_]FontDataChunk { internalFontChunk },
 };

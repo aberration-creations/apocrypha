@@ -207,7 +207,7 @@ fn render() !void {
 
     var buffer: [32]u8 = undefined;
 
-    const size: i32 = 80;
+    const size: i32 = 64;
     const gap: i32 = 16;
     const size_and_gap: i32 = size + gap;
     const margin_x: i32 = @divFloor(@as(i32, @intCast(canvas.width)) - 4*size-3*gap, 2);
@@ -290,11 +290,8 @@ fn render() !void {
                 s += @intFromFloat(@max(0,(1-(c.grow_t*c.grow_t)*8))*-16);
                 canvas.rect(x0+s, y0+s, x1-s, y1-s, bg_color);
                 const str = try std.fmt.bufPrint(&buffer, "{}", .{ cell.value });
-                var tx = @as(i16, @intCast(x0)) + 32+8;
-                var ty = @as(i16, @intCast(y0)) + 14+8;
-                tx -= @intCast(str.len * 10);
                 const font_color = ui.color32bgra.mixColor32bgraByFloat(0x00ffffff, white, cell_t*2);
-                try ui.drawTextV2(&canvas, &font, 24, font_color, tx, ty, str);
+                try ui.drawCenteredTextSpan(&canvas, &font, 24, font_color, @intCast(x0), @intCast(y0), @intCast(x1), @intCast(y1), str);
             }
         }
     }
