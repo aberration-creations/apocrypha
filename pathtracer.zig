@@ -3,7 +3,7 @@ const ui = @import("./src/index.zig");
 
 const Configuration = struct {
     fullscreen: bool = false,
-    samples: usize = 10,
+    samples: usize = 1000,
     threads: usize = 0,
 };
 

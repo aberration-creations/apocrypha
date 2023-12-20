@@ -1,4 +1,7 @@
-A simple cross platform ui library. 
+A simple cross platform gui library.
+
+![Screenshot of 2048 game made using this library](./docs/screenshot-2048.png)
+![Screenshot of a path tracer](./docs/screenshot-pathtracer.png)
 
 Everything gets rendered into a canvas in CPU memory. You then may do
 as you wish with the canvas:
@@ -8,11 +11,12 @@ as you wish with the canvas:
 
 To use import public functions from [`src/index.zig`](src/index.zig)
 
-To run examples see [`.vscode/tasks.json`](.vscode/tasks.json)
+Examples can be found at top level.
+ - to run on windows `zig run 2048.zig`
+ - to run on linux `zig run 2048.zig -lc -lxcb -lxcb-image`
 
-Required for x11 integration:
+Examples can be run with [`.vscode/tasks.json`](.vscode/tasks.json)
 
-    libxcb1-dev
-    libxcb-image0-dev
+On linux the following need to be installed for the x11 integration to work:
 
-Some commands assume having [ffmpeg](https://ffmpeg.org/) in PATH
+    sudo apt install libxcb1-dev libxcb-image0-dev
