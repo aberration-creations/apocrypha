@@ -13,7 +13,7 @@ const Cell = struct {
 var window: ui.Window = undefined;
 var canvas: ui.Canvas32 = undefined;
 var font: ui.Font = undefined;
-var game: [4][4]Cell = .{ .{ .{} } ** 4 } ** 4;
+var game: [4][4]Cell = .{.{.{}} ** 4} ** 4;
 var is_animating = false;
 var last_render_ms: i64 = 0;
 var score: usize = 0;
@@ -21,7 +21,6 @@ var score_delta: usize = 0;
 var score_delta_t: f32 = 1;
 
 pub fn main() !void {
-    
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer {
@@ -31,7 +30,7 @@ pub fn main() !void {
 
     canvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
     defer canvas.deinit();
-    
+
     window = ui.Window.init(.{
         .title = "2048 Game",
         .width = @intCast(canvas.width),
@@ -51,7 +50,7 @@ pub fn main() !void {
                 .paint => {
                     try render();
                 },
-                .keydown => |key| switch(key) {
+                .keydown => |key| switch (key) {
                     .escape => return,
                     .up => try move(0, -1),
                     .left => try move(-1, 0),
@@ -64,23 +63,19 @@ pub fn main() !void {
                 else => {},
             }
         }
-        if (is_animating)
-        {
+        if (is_animating) {
             try render();
             std.time.sleep(1);
         }
     }
-
 }
 
-fn move(dir_x: i32, dir_y: i32) !void
-{
+fn move(dir_x: i32, dir_y: i32) !void {
     var moved = false;
     var merge_score: usize = 0;
 
     for (0..4) |x| {
         for (0..4) |y| {
-            
             var from_x = x;
             var from_y = y;
 
@@ -99,8 +94,7 @@ fn move(dir_x: i32, dir_y: i32) !void
     if (moved) {
         addRandomValue();
 
-        if (merge_score > 0)
-        {
+        if (merge_score > 0) {
             score_delta = merge_score;
             score_delta_t = 0;
             score += score_delta;
@@ -111,87 +105,72 @@ fn move(dir_x: i32, dir_y: i32) !void
 }
 
 fn moveCell(x: usize, y: usize, dx: i32, dy: i32) struct { moved: bool, score: usize = 0 } {
-
-    var i_from_x: i32 = @intCast(x);
-    var i_from_y: i32 = @intCast(y);
+    const i_from_x: i32 = @intCast(x);
+    const i_from_y: i32 = @intCast(y);
     var to_x = x;
     var to_y = y;
-    var cell_from = &game[x][y];
+    const cell_from = &game[x][y];
 
-    if (cell_from.value == 0) 
-    {
+    if (cell_from.value == 0) {
         return .{ .moved = false };
     }
 
     for (1..4) |i| {
-        var signed_i: i32 = @intCast(i);
-        var nx = dx * signed_i + i_from_x;
-        var ny = dy * signed_i + i_from_y;
+        const signed_i: i32 = @intCast(i);
+        const nx = dx * signed_i + i_from_x;
+        const ny = dy * signed_i + i_from_y;
 
-        if (nx < 0 or ny < 0 or nx > 3 or ny > 3)
-        {
+        if (nx < 0 or ny < 0 or nx > 3 or ny > 3) {
             break; // move blocked by grid edge
         }
 
-        var unx: usize = @intCast(nx);
-        var uny: usize = @intCast(ny);
+        const unx: usize = @intCast(nx);
+        const uny: usize = @intCast(ny);
 
-        if (game[unx][uny].value == 0) 
-        {
+        if (game[unx][uny].value == 0) {
             to_x = unx;
             to_y = uny;
             continue; // move over empty
-        }
-        else if (game[unx][uny].value == cell_from.value)
-        {
+        } else if (game[unx][uny].value == cell_from.value) {
             to_x = unx;
             to_y = uny;
             break; // merge with same value
-        }
-        else 
-        {
+        } else {
             break; // move blocked by block of different value
         }
     }
 
-    if (to_x == x and to_y == y)
-    {
+    if (to_x == x and to_y == y) {
         return .{ .moved = false }; // no move
     }
 
     var cell_to = &game[to_x][to_y];
-    
+
     if (cell_from.value == cell_to.value) {
         // merge
         cell_to.value += cell_from.value;
-        cell_to.grow_t = 0; 
+        cell_to.grow_t = 0;
         cell_to.spawn_t = 1;
         cell_from.* = Cell{};
         return .{ .moved = true, .score = cell_to.value };
-    }
-    else if (cell_to.value == 0)
-    {
+    } else if (cell_to.value == 0) {
         // move
         cell_to.in_x_t = cell_from.in_x_t + @as(f32, @floatFromInt(-dx));
-        cell_to.in_y_t = cell_from.in_y_t + @as(f32,@floatFromInt(-dy));
+        cell_to.in_y_t = cell_from.in_y_t + @as(f32, @floatFromInt(-dy));
         cell_to.value = cell_from.value;
         cell_to.grow_t = cell_from.grow_t;
         cell_to.spawn_t = cell_from.spawn_t;
         cell_from.* = Cell{};
         return .{ .moved = true };
-    }
-    else 
-    {
+    } else {
         return .{ .moved = false };
     }
 }
 
 fn render() !void {
-
     const now = std.time.milliTimestamp();
     var dt: f32 = 0;
-    if (is_animating)
-    {
+    if (is_animating) {
         dt = @floatFromInt(now - last_render_ms);
         dt /= 1000;
     }
@@ -210,17 +189,17 @@ fn render() !void {
     const size: i32 = 64;
     const gap: i32 = 16;
     const size_and_gap: i32 = size + gap;
-    const margin_x: i32 = @divFloor(@as(i32, @intCast(canvas.width)) - 4*size-3*gap, 2);
-    const margin_y: i32 = @divFloor(@as(i32, @intCast(canvas.height)) - 4*size-3*gap, 2);
+    const margin_x: i32 = @divFloor(@as(i32, @intCast(canvas.width)) - 4 * size - 3 * gap, 2);
+    const margin_y: i32 = @divFloor(@as(i32, @intCast(canvas.height)) - 4 * size - 3 * gap, 2);
 
     for (0..4) |ux| {
         for (0..4) |uy| {
             const x: i32 = @intCast(ux);
             const y: i32 = @intCast(uy);
-            var x0 = margin_x + x * size_and_gap;
-            var y0 = margin_y + y * size_and_gap;
-            var x1 = x0 + size;
-            var y1 = y0 + size;
+            const x0 = margin_x + x * size_and_gap;
+            const y0 = margin_y + y * size_and_gap;
+            const x1 = x0 + size;
+            const y1 = y0 + size;
             canvas.rect(x0, y0, x1, y1, color_empty);
         }
     }
@@ -237,34 +216,32 @@ fn render() !void {
             const movespeed = 20;
             if (c.in_x_t > 0) {
                 is_animating = true;
-                c.in_x_t -= dt*movespeed;
+                c.in_x_t -= dt * movespeed;
                 if (c.in_x_t < 0) {
                     c.in_x_t = 0;
                 }
-            }
-            else if (c.in_x_t < 0) {
+            } else if (c.in_x_t < 0) {
                 is_animating = true;
-                c.in_x_t += dt*movespeed;
+                c.in_x_t += dt * movespeed;
                 if (c.in_x_t >= 0) {
                     c.in_x_t = 0;
                 }
             }
             if (c.in_y_t > 0) {
                 is_animating = true;
-                c.in_y_t -= dt*movespeed;
+                c.in_y_t -= dt * movespeed;
                 if (c.in_y_t < 0) {
                     c.in_y_t = 0;
                 }
-            }
-            else if (c.in_y_t < 0) {
+            } else if (c.in_y_t < 0) {
                 is_animating = true;
-                c.in_y_t += dt*movespeed;
+                c.in_y_t += dt * movespeed;
                 if (c.in_y_t >= 0) {
                     c.in_y_t = 0;
                 }
             }
             c.grow_t += dt;
-            if (c.grow_t > 1){
+            if (c.grow_t > 1) {
                 c.grow_t = 1;
             } else {
                 is_animating = true;
@@ -278,25 +255,24 @@ fn render() !void {
             game[ux][uy].spawn_t = cell_t;
             const cell = game[ux][uy];
 
-            if (cell.value > 0)
-            {
-                var bg_color = getColorByValue(cell.value);
-                var s: i32 = @intFromFloat(32-cell_t*128);
+            if (cell.value > 0) {
+                const bg_color = getColorByValue(cell.value);
+                var s: i32 = @intFromFloat(32 - cell_t * 128);
                 x0 += @intFromFloat(cell.in_x_t * 96);
                 y0 += @intFromFloat(cell.in_y_t * 96);
                 x1 += @intFromFloat(cell.in_x_t * 96);
                 y1 += @intFromFloat(cell.in_y_t * 96);
                 if (s < 0) s = 0;
-                s += @intFromFloat(@max(0,(1-(c.grow_t*c.grow_t)*8))*-16);
-                canvas.rect(x0+s, y0+s, x1-s, y1-s, bg_color);
-                const str = try std.fmt.bufPrint(&buffer, "{}", .{ cell.value });
-                const font_color = ui.color32bgra.mixColor32bgraByFloat(0x00ffffff, white, cell_t*2);
+                s += @intFromFloat(@max(0, (1 - (c.grow_t * c.grow_t) * 8)) * -16);
+                canvas.rect(x0 + s, y0 + s, x1 - s, y1 - s, bg_color);
+                const str = try std.fmt.bufPrint(&buffer, "{}", .{cell.value});
+                const font_color = ui.color32bgra.mixColor32bgraByFloat(0x00ffffff, white, cell_t * 2);
                 try ui.drawCenteredTextSpan(&canvas, &font, 24, font_color, @intCast(x0), @intCast(y0), @intCast(x1), @intCast(y1), str);
             }
         }
     }
 
-    const str = try std.fmt.bufPrint(&buffer, "score {}", .{ score });
+    const str = try std.fmt.bufPrint(&buffer, "score {}", .{score});
     const score_x0: i16 = @intCast(margin_x);
     const score_y0: i16 = @intCast(margin_y - 48);
     try ui.drawTextV2(&canvas, &font, 24, white, score_x0, score_y0, str);
@@ -306,12 +282,11 @@ fn render() !void {
     } else {
         is_animating = true;
     }
-    
 
-    const str2 = try std.fmt.bufPrint(&buffer, "+{}", .{ score_delta });
+    const str2 = try std.fmt.bufPrint(&buffer, "+{}", .{score_delta});
     const anim_color = ui.color32bgra.mixColor32bgraByFloat(0xf080c020, 0x00ff00, score_delta_t);
-    const anim_sx = score_x0 + @as(i16, @intCast(str.len*20));
-    const anim_sy = score_y0 + @as(i16, @intFromFloat(score_delta_t*score_delta_t*-50));
+    const anim_sx = score_x0 + @as(i16, @intCast(str.len * 20));
+    const anim_sy = score_y0 + @as(i16, @intFromFloat(score_delta_t * score_delta_t * -50));
     try ui.drawTextV2(&canvas, &font, 24, anim_color, anim_sx, anim_sy, str2);
 
     ui.presentCanvas32(window, canvas);
@@ -320,10 +295,9 @@ fn render() !void {
 fn addRandomValue() void {
     for (0..100) |i| {
         _ = i;
-        var rx = rand.next() % 4;
-        var ry = rand.next() % 4;
-        if (game[rx][ry].value == 0)
-        {   
+        const rx = rand.next() % 4;
+        const ry = rand.next() % 4;
+        if (game[rx][ry].value == 0) {
             var value: u16 = 2;
             if (rand.next() % 6 == 0) {
                 value = 4;
@@ -337,8 +311,7 @@ fn addRandomValue() void {
     }
 }
 
-fn getColorByValue(value: u16) u32
-{
+fn getColorByValue(value: u16) u32 {
     return switch (value) {
         0 => 0xff303030,
         2 => 0xff3050b0,

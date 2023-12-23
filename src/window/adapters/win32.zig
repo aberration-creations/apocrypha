@@ -35,7 +35,7 @@ extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
 extern "user32" fn GetSystemMetrics(nIndex: i32) i32;
 
-extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque{}) HGDIOBJ;
+extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque {}) HGDIOBJ;
 extern "gdi32" fn CreateCompatibleDC(hdc: HDC) HDC;
 extern "gdi32" fn GetDC(hwnd: HWND) HDC;
 extern "gdi32" fn SelectObject(hdc: HDC, hdobj: HGDIOBJ) HGDIOBJ;
@@ -52,7 +52,6 @@ var static_event_queue_tail: u8 = 0;
 const WindowInitOptions = common.WindowCreateOptions;
 
 pub const Window = struct {
-
     hwnd: HWND,
     window_dc: ?HDC = null,
     bitmap_dc: ?HDC = null,
@@ -61,14 +60,13 @@ pub const Window = struct {
     prev_height: u16 = undefined,
     prev_data: []u32 = undefined,
 
-    pub fn init(options: WindowInitOptions) Window 
-    {
+    pub fn init(options: WindowInitOptions) Window {
         const hInstance: win32.HINSTANCE = GetModuleHandleA(null);
 
         ensureStaticClassRegistered(hInstance);
         const className = static_class_name;
 
-        var titleBuffer: [1024]u8 = undefined; 
+        var titleBuffer: [1024]u8 = undefined;
         // TODO maybe unicode support
         @memcpy(titleBuffer[0..options.title.len], options.title);
         titleBuffer[options.title.len] = 0;
@@ -77,41 +75,29 @@ pub const Window = struct {
         var width: i32 = @intCast(options.width);
         var height: i32 = @intCast(options.height);
 
-
         if (options.fullscreen) {
             style = user32.WS_POPUP;
             width = GetSystemMetrics(SM_CXSCREEN);
             height = GetSystemMetrics(SM_CYSCREEN);
         }
 
-        if (user32.CreateWindowExA(
-            0,                    // Optional window styles.
-            className,            // Window class
+        if (user32.CreateWindowExA(0, // Optional window styles.
+            className, // Window class
             @ptrCast(&titleBuffer), // Window text
-            style,  // Window style
+            style, // Window style
 
-            // Size and position
-            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, width, height,
-
-            null,      // Parent window
-            null,      // Menu
+        // Size and position
+            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, width, height, null, // Parent window
+            null, // Menu
             hInstance, // Instance handle
-            null       // Additional application data
+            null // Additional application data
         )) |hwnd| {
-
             _ = user32.ShowWindow(hwnd, user32.SW_SHOW);
-            return Window { 
-                .hwnd = hwnd
-            };
-        }
-        else unreachable;
-        
-
-
+            return Window{ .hwnd = hwnd };
+        } else unreachable;
     }
 
     pub fn presentCanvasU32BGRA(w: *Window, width: u16, height: u16, data: []u32) void {
-
         if (w.window_dc == null) {
             w.window_dc = GetDC(w.hwnd);
         }
@@ -120,21 +106,16 @@ pub const Window = struct {
             w.bitmap_dc = CreateCompatibleDC(w.window_dc.?);
         }
 
-        if (w.bitmap == null or width != w.prev_height or height != w.prev_height or w.prev_data.ptr != data.ptr)
-        {
+        if (w.bitmap == null or width != w.prev_height or height != w.prev_height or w.prev_data.ptr != data.ptr) {
             // need to create new bitmap (first call or resize)
-            const new_bitmap = CreateBitmap(
-                width,
-                height, 
-                1, // don't know what is it actually... let it be 1
+            const new_bitmap = CreateBitmap(width, height, 1, // don't know what is it actually... let it be 1
                 32, // bpp
-                @ptrCast(data)
-            ); 
-            
+                @ptrCast(data));
+
             _ = SelectObject(w.bitmap_dc.?, @ptrCast(new_bitmap));
 
             if (w.bitmap) |bitmap| {
-                _ = DeleteObject(bitmap); // delete previous bitmap 
+                _ = DeleteObject(bitmap); // delete previous bitmap
             }
 
             w.bitmap = new_bitmap;
@@ -142,9 +123,8 @@ pub const Window = struct {
             w.prev_height = height;
             w.prev_data = data;
         }
-        
-        _ = BitBlt(w.window_dc.?, 0, 0, width, height, w.bitmap_dc.?, 0, 0, SRCCOPY);
 
+        _ = BitBlt(w.window_dc.?, 0, 0, width, height, w.bitmap_dc.?, 0, 0, SRCCOPY);
     }
 
     pub fn deinit(self: Window) void {
@@ -161,52 +141,34 @@ pub const Window = struct {
         }
         _ = user32.DestroyWindow(self.hwnd);
     }
-    
 };
-
 
 fn ensureStaticClassRegistered(hInstance: win32.HINSTANCE) void {
     if (static_class_atom != 0) {
         return;
     }
-    static_class_atom = registerWindowClass(
-        hInstance, static_class_name, staticWindowProc
-    );
-    if (static_class_atom == 0){
+    static_class_atom = registerWindowClass(hInstance, static_class_name, staticWindowProc);
+    if (static_class_atom == 0) {
         unreachable; // failed to register
     }
 }
 
-fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, windowProc: user32.WNDPROC) ATOM
-{
-    var wc = user32.WNDCLASSEXA
-    {
-        .style = user32.CS_HREDRAW | user32.CS_VREDRAW,
-        .lpfnWndProc = windowProc,
-        .hInstance = hInstance,
-        .lpszClassName = className,
-        .hIcon = LoadIconA(null, IDI_APPLICATION),
-        .hCursor = LoadCursorA(null, IDC_ARROW),
-        .hIconSm = null,
-        .hbrBackground = null,
-        .lpszMenuName = null
-    };
+fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, windowProc: user32.WNDPROC) ATOM {
+    var wc = user32.WNDCLASSEXA{ .style = user32.CS_HREDRAW | user32.CS_VREDRAW, .lpfnWndProc = windowProc, .hInstance = hInstance, .lpszClassName = className, .hIcon = LoadIconA(null, IDI_APPLICATION), .hCursor = LoadCursorA(null, IDC_ARROW), .hIconSm = null, .hbrBackground = null, .lpszMenuName = null };
 
     const atom = user32.RegisterClassExA(&wc);
     return atom;
 }
 
-pub fn processMessagesUntilQuit() void
-{
+pub fn processMessagesUntilQuit() void {
     var msg: user32.MSG = undefined;
-    while (user32.GetMessageA(&msg, null, 0, 0) > 0)
-    {
+    while (user32.GetMessageA(&msg, null, 0, 0) > 0) {
         _ = user32.TranslateMessage(&msg);
         _ = user32.DispatchMessageA(&msg);
     }
 }
 
-/// get next event from caller thread's message queue 
+/// get next event from caller thread's message queue
 /// expected to be called from the main 'GUI' thread
 pub fn nextEvent(options: common.NextEventOptions) ?EventData {
     if (getEventFromStaticQueue()) |event| {
@@ -215,18 +177,14 @@ pub fn nextEvent(options: common.NextEventOptions) ?EventData {
     var hadRawMessage = false;
     if (options.blocking) {
         hadRawMessage = getRawMessage();
-    }
-    else {
+    } else {
         hadRawMessage = peekRawMessage();
     }
     if (getEventFromStaticQueue()) |event| {
         return event;
-    }
-    else if (hadRawMessage) {
-        return EventData { .unknown = undefined };
-    }
-    else 
-    {
+    } else if (hadRawMessage) {
+        return EventData{ .unknown = undefined };
+    } else {
         return null;
     }
 }
@@ -236,38 +194,29 @@ inline fn getEventFromStaticQueue() ?EventData {
         const result = static_event_queue[static_event_queue_head];
         static_event_queue_head = static_event_queue_head +% 1;
         return result;
-    }
-    else {
+    } else {
         return null;
     }
 }
 
 /// get next message from thread's message queue
-pub fn getRawMessage() bool
-{
+pub fn getRawMessage() bool {
     var msg: user32.MSG = undefined;
-    if (user32.GetMessageA(&msg, null, 0, 0) > 0)
-    {
+    if (user32.GetMessageA(&msg, null, 0, 0) > 0) {
         handleMessage(&msg);
         return true;
-    }
-    else 
-    {
+    } else {
         return false;
     }
 }
 
 /// peek next message from thread's message queue
-pub fn peekRawMessage() bool 
-{
+pub fn peekRawMessage() bool {
     var msg: user32.MSG = undefined;
-    if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0)
-    {
+    if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0) {
         handleMessage(&msg);
         return true;
-    }
-    else 
-    {
+    } else {
         return false;
     }
 }
@@ -277,36 +226,28 @@ fn handleMessage(msg: *user32.MSG) void {
     _ = user32.DispatchMessageA(msg);
 }
 
-fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT
-{
-    var event: EventData = switch (uMsg)
-    {
-        user32.WM_KEYDOWN => EventData { 
-            .keydown = switch(wParam) {
-                VK_LEFT => .left,
-                VK_RIGHT => .right,
-                VK_UP => .up,
-                VK_DOWN => .down,
-                VK_ESCAPE => .escape,
-                else => .unknown,
-            } 
-        }, // TODO extend
-        user32.WM_PAINT => EventData { .paint = undefined },
-        user32.WM_CLOSE => EventData { .closewindow = undefined },
-        user32.WM_MOUSEMOVE => EventData { 
-            .pointermove = common.Position {
-                .x = @intCast(lParam & 0xffff), 
-                .y = @intCast((lParam >> 16) & 0xffff), 
-            } 
-        },
-        user32.WM_SIZE => EventData { 
-            .resize = common.Size { 
-                .width = @intCast(lParam & 0xffff), 
-                .height = @intCast((lParam >> 16) & 0xffff), 
-            } 
-        },
-        user32.WM_LBUTTONDOWN => EventData { .unknown = undefined },
-        else => EventData { .unknown = undefined },
+fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT {
+    const event: EventData = switch (uMsg) {
+        user32.WM_KEYDOWN => EventData{ .keydown = switch (wParam) {
+            VK_LEFT => .left,
+            VK_RIGHT => .right,
+            VK_UP => .up,
+            VK_DOWN => .down,
+            VK_ESCAPE => .escape,
+            else => .unknown,
+        } }, // TODO extend
+        user32.WM_PAINT => EventData{ .paint = undefined },
+        user32.WM_CLOSE => EventData{ .closewindow = undefined },
+        user32.WM_MOUSEMOVE => EventData{ .pointermove = common.Position{
+            .x = @intCast(lParam & 0xffff),
+            .y = @intCast((lParam >> 16) & 0xffff),
+        } },
+        user32.WM_SIZE => EventData{ .resize = common.Size{
+            .width = @intCast(lParam & 0xffff),
+            .height = @intCast((lParam >> 16) & 0xffff),
+        } },
+        user32.WM_LBUTTONDOWN => EventData{ .unknown = undefined },
+        else => EventData{ .unknown = undefined },
     };
     static_event_queue[static_event_queue_tail] = event;
     static_event_queue_tail = static_event_queue_tail +% 1;

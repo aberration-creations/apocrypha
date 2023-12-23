@@ -24,10 +24,10 @@ pub const X11Connection = struct {
     wm_protocols: u32 = 0,
 
     pub fn init() X11Connection {
-        var c = x.xcb_connect(null, null);
-        var screen = x.xcb_setup_roots_iterator(x.xcb_get_setup(c)).data;
-        var depth = screen.*.root_depth;
-        var colormap = screen.*.default_colormap;
+        const c = x.xcb_connect(null, null);
+        const screen = x.xcb_setup_roots_iterator(x.xcb_get_setup(c)).data;
+        const depth = screen.*.root_depth;
+        const colormap = screen.*.default_colormap;
         return X11Connection{
             .conn = c,
             .screen = screen,
@@ -83,14 +83,14 @@ pub const X11Connection = struct {
     }
 
     pub fn waitForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
-        var eventPtr = x.xcb_wait_for_event(self.conn);
+        const eventPtr = x.xcb_wait_for_event(self.conn);
         defer x.free(eventPtr);
         if (eventPtr == null) return null;
         return eventPtr.*;
     }
 
     pub fn pollForEventRaw(self: *X11Connection) ?x.xcb_generic_event_t {
-        var eventPtr = x.xcb_poll_for_event(self.conn);
+        const eventPtr = x.xcb_poll_for_event(self.conn);
         defer x.free(eventPtr);
         if (eventPtr == null) return null;
         return eventPtr.*;
@@ -105,12 +105,10 @@ pub const X11Connection = struct {
         }
         if (raw_event) |value| {
             return eventFrom(value, self);
-        }
-        else {
+        } else {
             return null;
         }
     }
-
 };
 
 pub const X11Window = struct {
@@ -122,10 +120,10 @@ pub const X11Window = struct {
     pixmap_height: u16 = 0,
 
     pub fn init(xc: *X11Connection, opt: X11WindowInitOptions) X11Window {
-        var c = xc.conn;
-        var win = x.xcb_generate_id(c);
-        var screen = xc.screen;
-        var windowResult = x.xcb_create_window(
+        const c = xc.conn;
+        const win = x.xcb_generate_id(c);
+        const screen = xc.screen;
+        const windowResult = x.xcb_create_window(
             c,
             x.XCB_COPY_FROM_PARENT,
             win,
@@ -148,7 +146,7 @@ pub const X11Window = struct {
         );
         _ = windowResult;
 
-        var empty_gc = x.xcb_generate_id(c);
+        const empty_gc = x.xcb_generate_id(c);
         _ = x.xcb_create_gc(c, empty_gc, win, 0, null);
 
         var window = X11Window{
@@ -164,11 +162,10 @@ pub const X11Window = struct {
         return window;
     }
 
-    fn enableCloseWindowProtocol(w: *X11Window) void
-    {
+    fn enableCloseWindowProtocol(w: *X11Window) void {
         const wmProtocols = w.xc.getWmProtocolsAtom();
         const wmDeleteWindow = w.xc.getWmDeleteWindowAtom();
-        _ = x.xcb_change_property(w.xc.conn, x.XCB_PROP_MODE_REPLACE, w.win, wmProtocols, x.XCB_ATOM_ATOM, 32, 1, &wmDeleteWindow );
+        _ = x.xcb_change_property(w.xc.conn, x.XCB_PROP_MODE_REPLACE, w.win, wmProtocols, x.XCB_ATOM_ATOM, 32, 1, &wmDeleteWindow);
     }
 
     pub fn setTitle(w: *X11Window, title: []const u8) void {
@@ -200,8 +197,8 @@ pub const X11Window = struct {
             w.pixmap_height = height;
         }
 
-        var format = x.XCB_IMAGE_FORMAT_Z_PIXMAP;
-        var image = x.xcb_image_create_native(c, width, height, @intCast(format), w.xc.depth, null, @intCast(data.len), data.ptr);
+        const format = x.XCB_IMAGE_FORMAT_Z_PIXMAP;
+        const image = x.xcb_image_create_native(c, width, height, @intCast(format), w.xc.depth, null, @intCast(data.len), data.ptr);
         _ = x.xcb_image_put(c, w.pixmap, w.gc, image, 0, 0, 0);
         _ = x.xcb_image_destroy(image);
         _ = x.xcb_copy_area(c, w.pixmap, w.win, w.gc, 0, 0, 0, 0, width, height);
@@ -233,7 +230,6 @@ pub const XWindow = struct {
     pix_data: []u8,
 };
 
-
 fn eventFrom(raw: x.xcb_generic_event_t, conn: *X11Connection) common.EventData {
     // most significant bit needs to be masked off from response_type before using
     const _type = raw.response_type & 0x7f;
@@ -241,54 +237,49 @@ fn eventFrom(raw: x.xcb_generic_event_t, conn: *X11Connection) common.EventData 
     switch (_type) {
         x.XCB_CONFIGURE_NOTIFY => {
             const configureNotify = @as([*c]const x.xcb_configure_notify_event_t, @ptrCast(&raw)).*;
-            return EventData { 
-                .resize = common.Size { 
-                    .width = configureNotify.width, 
-                    .height = configureNotify.height 
-                }
-            };
+            return EventData{ .resize = common.Size{ .width = configureNotify.width, .height = configureNotify.height } };
         },
         x.XCB_EXPOSE => {
             // const exposeEventPtr = @as([*c]ui.x11.x.xcb_expose_event_t, @ptrCast(eventPtr));
             // std.debug.print("expose {} {}\n", .{ exposeEventPtr.*.width, exposeEventPtr.*.height });
             // win.presentCanvas(width, height, data);
-            return EventData { .paint = undefined };
+            return EventData{ .paint = undefined };
         },
         x.XCB_KEY_PRESS => {
             const keyPress = @as([*c]const x.xcb_key_press_event_t, @ptrCast(&raw)).*;
-            return EventData { .keydown = switch (keyPress.detail) {
+            return EventData{ .keydown = switch (keyPress.detail) {
                 9 => .escape,
                 111 => .up,
                 113 => .left,
                 116 => .down,
                 114 => .right,
                 else => .unknown,
-            }};
+            } };
         },
         x.XCB_MOTION_NOTIFY => {
             // const motionEventPtr = @as([*c]ui.x11.x.xcb_motion_notify_event_t, @ptrCast(eventPtr));
             // const motionEvent = motionEventPtr.*;
             // _ = motionEvent;
             // std.debug.print("motion {} {}\n", .{ motionEvent.event_x, motionEvent.event_x });
-            return EventData { .unknown = undefined };
+            return EventData{ .unknown = undefined };
         },
         x.XCB_NO_EXPOSURE => {
             // const noExposurePtr = @as([*c]ui.x11.x.xcb_no_exposure_event_t, @ptrCast(eventPtr));
             // const noExposure = noExposurePtr.*;
             // std.debug.print("no exposure {} \n", .{noExposure.major_opcode});
-            return EventData { .unknown = undefined };
+            return EventData{ .unknown = undefined };
         },
         x.XCB_CLIENT_MESSAGE => {
             const clientMessage = @as([*c]const x.xcb_client_message_event_t, @ptrCast(&raw)).*;
-            if( clientMessage.data.data32[0] == conn.getWmDeleteWindowAtom() ) {
-                return EventData { .closewindow = undefined };
+            if (clientMessage.data.data32[0] == conn.getWmDeleteWindowAtom()) {
+                return EventData{ .closewindow = undefined };
             } else {
-                return EventData { .unknown = undefined };
+                return EventData{ .unknown = undefined };
             }
         },
         else => {
             // std.debug.print("event type {} not handled\n", .{event.response_type});
-            return EventData { .unknown = undefined };
+            return EventData{ .unknown = undefined };
         },
     }
 }

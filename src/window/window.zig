@@ -9,12 +9,11 @@ const subsystem = builtin.target.os.tag;
 pub const NextEventOptions = common.NextEventOptions;
 pub const Event = common.Event;
 pub const Key = common.Key;
-pub const EventData = common.EventData; 
+pub const EventData = common.EventData;
 pub const WindowCreateOptions = common.WindowCreateOptions;
 
 pub const win32 = @import("adapters/win32.zig");
 pub const x11 = @import("adapters/x11.zig");
-
 
 const maxWindowCount = 16;
 var nextWindowHandle: u16 = 0;
@@ -24,14 +23,14 @@ var x11W: [maxWindowCount]x11.X11Window = undefined;
 var x11C: x11.X11Connection = undefined;
 var x11C_connected: bool = false;
 
-/// cross-platform Window primite, 
+/// cross-platform Window primite,
 /// in general you need one to get something on screen
 pub const Window = struct {
     handle: usize,
     const Self = @This();
 
     pub fn init(options: WindowCreateOptions) Window {
-        var handle = nextWindowHandle;
+        const handle = nextWindowHandle;
         nextWindowHandle += 1;
         if (handle >= maxWindowCount) {
             unreachable;
@@ -42,12 +41,10 @@ pub const Window = struct {
                 ensureX11ConnectionExists();
                 x11W[handle] = x11.X11Window.init(&x11C, options);
             },
-            else => @compileError("not supported")
+            else => @compileError("not supported"),
         }
         window_count += 1;
-        return Window {
-            .handle = handle
-        };
+        return Window{ .handle = handle };
     }
 
     pub fn deinit(self: Self) void {
@@ -56,11 +53,11 @@ pub const Window = struct {
             .linux => {
                 x11W[self.handle].deinit();
                 window_count -= 1;
-                if (window_count == 0){
+                if (window_count == 0) {
                     closeX11ConnectionIfOpened();
                 }
             },
-            else => @compileError("not supported")
+            else => @compileError("not supported"),
         }
     }
 
@@ -68,10 +65,9 @@ pub const Window = struct {
         switch (subsystem) {
             .linux => x11W[self.handle].presentCanvasU32BGRA(width, height, data),
             .windows => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
-            else => @compileError("not supported") 
+            else => @compileError("not supported"),
         }
     }
-
 };
 
 fn ensureX11ConnectionExists() void {
@@ -94,6 +90,6 @@ pub fn nextEvent(options: NextEventOptions) ?EventData {
     return switch (subsystem) {
         .windows => win32.nextEvent(options),
         .linux => x11C.nextEvent(options),
-        else => @compileError("not supported")
+        else => @compileError("not supported"),
     };
 }

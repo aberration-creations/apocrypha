@@ -1,9 +1,8 @@
 const std = @import("std");
 
-/// Generic representation of grid of pixels. 
+/// Generic representation of grid of pixels.
 /// Meant for graphics operations.
 pub fn Canvas(comptime P: type) type {
-
     const EMPTY: [0]P = .{};
 
     return struct {
@@ -23,7 +22,7 @@ pub fn Canvas(comptime P: type) type {
 
         /// Not efficient, only exists for convenience.
         /// Returns pixel from given position or null if outside canvas range.
-        pub inline fn getPixel(self: Self, x: usize, y: usize) ?P {   
+        pub inline fn getPixel(self: Self, x: usize, y: usize) ?P {
             if (x < self.width and y < self.height)
                 return self.getPixelUnsafe(x, y);
             return null;
@@ -37,18 +36,18 @@ pub fn Canvas(comptime P: type) type {
 
         /// Not efficient, only exists for convenience.
         /// Caller must ensure that the coordinates are in range.
-        pub inline fn getPixelUnsafe(self: Self, x: usize, y: usize) P {   
+        pub inline fn getPixelUnsafe(self: Self, x: usize, y: usize) P {
             return self.row(y)[x];
         }
 
         /// Get direct access to row of pixels for read/write purposes.
         /// Caller must ensure that the coordinates are in range.
         pub inline fn row(self: Self, y: usize) []P {
-            const from = y*self.width;
+            const from = y * self.width;
             const to = from + self.width;
             return self.pixels[from..to];
         }
-        
+
         /// Get direct access to a contiguous span of pixels for read/write purposes.
         /// Caller must ensure that the coordinates are in range.
         pub inline fn span(self: Self, y: usize, x0: usize, x1: usize) []P {
@@ -56,10 +55,9 @@ pub fn Canvas(comptime P: type) type {
         }
 
         /// Initialize with allocator and allocate canvas
-        pub fn initAlloc(allocator: std.mem.Allocator, width: usize, height: usize) !Self 
-        {
-            var data = try allocator.alloc(P, width*height);
-            return Self {
+        pub fn initAlloc(allocator: std.mem.Allocator, width: usize, height: usize) !Self {
+            const data = try allocator.alloc(P, width * height);
+            return Self{
                 .allocator = allocator,
                 .pixels = data,
                 .width = width,
@@ -69,7 +67,7 @@ pub fn Canvas(comptime P: type) type {
 
         // Initializes with allocator, but does not allocate yet.
         pub fn initAllocEmpty(allocator: std.mem.Allocator) Self {
-            return Self {
+            return Self{
                 .allocator = allocator,
                 .pixels = &EMPTY,
                 .width = 0,
@@ -78,13 +76,12 @@ pub fn Canvas(comptime P: type) type {
         }
 
         // Initialize with static buffer, enables canvas usage without allocator
-        pub fn initBuffer(buf: []P, width: u32, height: u32) Self
-        {
+        pub fn initBuffer(buf: []P, width: u32, height: u32) Self {
             const requiredSize = width * height;
-            if (buf.len < requiredSize){
+            if (buf.len < requiredSize) {
                 @panic("given width/height will not fit into buffer");
             }
-            return Self {
+            return Self{
                 .allocator = null,
                 .height = height,
                 .width = width,
@@ -137,16 +134,14 @@ pub fn Canvas(comptime P: type) type {
         /// Draw a rectangle at given position and color.
         /// Caller must ensure that the coordinates are in range.
         pub fn rectUnsafe(self: *Self, x0: usize, y0: usize, x1: usize, y1: usize, p: P) void {
-            for (y0..y1) |y| 
+            for (y0..y1) |y|
                 @memset(self.span(y, x0, x1), p);
         }
-    
+
         /// Free the memory used by the canvas, to be used with defer
         pub fn deinit(self: *Self) void {
-            if (self.allocator) |allocator|
-            {
-                if (self.pixels.ptr != &EMPTY)
-                {
+            if (self.allocator) |allocator| {
+                if (self.pixels.ptr != &EMPTY) {
                     allocator.free(self.pixels);
                 }
             }
@@ -158,67 +153,57 @@ pub fn Canvas(comptime P: type) type {
         pub const setPixel = putPixel;
         pub const getRow = row;
         pub const getStride = span;
-
     };
-
 }
 
-test "using buffer"
-{
-    var buf: [256*256]u32 = undefined;
+test "using buffer" {
+    var buf: [256 * 256]u32 = undefined;
     var c = Canvas(u32).initBuffer(&buf, 256, 256);
     c.putPixel(0, 0, 0xff00ff00);
-    try std.testing.expectEqual(c.getPixel(0,0), 0xff00ff00);
+    try std.testing.expectEqual(c.getPixel(0, 0), 0xff00ff00);
     c.putPixel(255, 255, 0xff00ff00);
-    try std.testing.expectEqual(c.getPixel(255,255), 0xff00ff00);
+    try std.testing.expectEqual(c.getPixel(255, 255), 0xff00ff00);
 }
 
-test "using allocator"
-{
+test "using allocator" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
     defer c.deinit();
     c.putPixel(0, 0, 0xff00ff00);
-    try std.testing.expectEqual(c.getPixel(0,0), 0xff00ff00);
+    try std.testing.expectEqual(c.getPixel(0, 0), 0xff00ff00);
 }
 
-test "can write full area"
-{
+test "can write full area" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
     defer c.deinit();
-    for (0..c.height) |y|
-    {
+    for (0..c.height) |y| {
         var row = c.getRow(y);
-        for (row, 0..) |_, x|
-        {   
+        for (row, 0..) |_, x| {
             row[x] = 0xff00ff00;
         }
     }
-    try std.testing.expectEqual(c.getPixel(15,15), 0xff00ff00);
+    try std.testing.expectEqual(c.getPixel(15, 15), 0xff00ff00);
 }
 
-test "clear canvas"
-{
+test "clear canvas" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
     defer c.deinit();
     c.clear(0xffeedd);
-    try std.testing.expectEqual(c.getPixel(0,0), 0xffeedd);
-    try std.testing.expectEqual(c.getPixel(15,15), 0xffeedd);
+    try std.testing.expectEqual(c.getPixel(0, 0), 0xffeedd);
+    try std.testing.expectEqual(c.getPixel(15, 15), 0xffeedd);
 }
 
-test "rect on canvas"
-{
+test "rect on canvas" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
     defer c.deinit();
     c.clear(0x000000);
     c.rect(4, 4, 8, 8, 0xffffff);
-    try std.testing.expectEqual(c.getPixel(3,3), 0x000000);
-    try std.testing.expectEqual(c.getPixel(4,4), 0xffffff);
-    try std.testing.expectEqual(c.getPixel(7,7), 0xffffff);
-    try std.testing.expectEqual(c.getPixel(8,8), 0x000000);
+    try std.testing.expectEqual(c.getPixel(3, 3), 0x000000);
+    try std.testing.expectEqual(c.getPixel(4, 4), 0xffffff);
+    try std.testing.expectEqual(c.getPixel(7, 7), 0xffffff);
+    try std.testing.expectEqual(c.getPixel(8, 8), 0x000000);
 }
 
-test "reallocate"
-{
+test "reallocate" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
     defer c.deinit();
     try c.reallocate(64, 96);
@@ -226,9 +211,8 @@ test "reallocate"
     try std.testing.expectEqual(c.height, 96);
 }
 
-test "rect is clipped"
-{
-    var allocator = std.testing.allocator;
+test "rect is clipped" {
+    const allocator = std.testing.allocator;
     var c = try Canvas(u32).initAlloc(allocator, 16, 16);
     defer c.deinit();
     c.rect(8, 8, 24, 24, 0);
@@ -237,11 +221,9 @@ test "rect is clipped"
     c.rect(18, 18, 24, 24, 0);
 }
 
-test "get/set pixel is clipped"
-{
-    var allocator = std.testing.allocator;
+test "get/set pixel is clipped" {
+    const allocator = std.testing.allocator;
     var c = try Canvas(u32).initAlloc(allocator, 16, 16);
     defer c.deinit();
     c.putPixel(114, 144, 0);
 }
-
