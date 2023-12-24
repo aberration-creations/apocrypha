@@ -29,6 +29,7 @@ pub const Window = struct {
     handle: usize,
     const Self = @This();
 
+    /// Creates a new window. Check WindowCreateOptions for additional options.
     pub fn init(options: WindowCreateOptions) Window {
         const handle = nextWindowHandle;
         nextWindowHandle += 1;

@@ -2,6 +2,7 @@ const std = @import("std");
 
 /// Generic representation of grid of pixels.
 /// Meant for graphics operations.
+/// Gives you direct memory access to implement your own drawing functions
 pub fn Canvas(comptime P: type) type {
     const EMPTY: [0]P = .{};
 

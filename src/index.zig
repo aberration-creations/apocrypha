@@ -1,4 +1,12 @@
 pub const CanvasGeneric = @import("./canvas/canvas.zig").Canvas;
+
+/// Canvas32 is called Canvas32 because the underlying representation of a pixel is a 32-bit unsigned integer.
+/// 
+/// To manipulate colors you can use the utility functions from `color32bgra`
+/// You can also just make colors by just using some hex magic numbers const white = 0xffffffff
+/// 
+///     color32bgra.makeColor32bgra(255,255,255,255);
+/// 
 pub const Canvas32 = CanvasGeneric(u32);
 
 const font = @import("./canvas/font/font.zig");
