@@ -81,5 +81,11 @@
             "command": "clear && zig test src/index.zig",
             "problemMatcher": []
         },
+        {
+            "label": "rx11",
+            "type": "shell",
+            "command": "clear && zig test rx11.zig && clear && zig run rx11.zig",
+            "problemMatcher": "$zig"
+        },
     ]
 }
