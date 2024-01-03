@@ -84,7 +84,7 @@
         {
             "label": "rx11",
             "type": "shell",
-            "command": "clear && zig test rx11.zig && clear && zig run rx11.zig",
+            "command": "clear && zig test src/window/adapters/rx11.zig && zig run rx11.zig",
             "problemMatcher": "$zig"
         },
     ]
