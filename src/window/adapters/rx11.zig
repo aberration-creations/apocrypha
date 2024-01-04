@@ -15,6 +15,14 @@ pub const Error = error{
     ConnectionSetupUnknownReply,
 };
 
+pub fn createWindow(conn: Connection) !void {
+    try conn.write(CreateWindowRequest{});
+}
+
+pub fn mapWindow(conn: Connection) !void {
+    try conn.write(MapWindowRequest{});
+}
+
 pub const Connection = struct {
     stream: std.net.Stream,
 
@@ -24,22 +32,7 @@ pub const Connection = struct {
             .stream = try createDisplayServerStream(server),
         };
         errdefer destroyDisplayServerStream(self.stream);
-
-        try self.write(InitRequest.init());
-
-        var initStatus: [2]u8 = undefined;
-        try self.read(&initStatus);
-        switch (initStatus[0]) {
-            0 => return Error.ConnectionSetupFailed, // TODO get reason
-            1 => {
-                // success!
-                // TODO read the rest of the reply
-                std.debug.print("successfully connected!\n", .{});
-            },
-            2 => return Error.ConnectionSetupNeedsAuthenticate, // TODO what auth?
-            else => return Error.ConnectionSetupUnknownReply,
-        }
-
+        try self.setupConnection();
         return self;
     }
 
@@ -47,30 +40,121 @@ pub const Connection = struct {
         destroyDisplayServerStream(self.stream);
     }
 
-    pub fn thing(self: Connection) void {
-        _ = self;
+    fn setupConnection(self: Connection) !void {
+        try self.write(ConnectionSetupRequest.init());
+
+        var status: ConnectionSetupReplyStatus = undefined;
+        try self.read(&status);
+
+        switch (status.code) {
+            0 => return Error.ConnectionSetupFailed, // TODO get reason
+            1 => {}, // success!
+            2 => return Error.ConnectionSetupNeedsAuthenticate, // TODO what auth?
+            else => return Error.ConnectionSetupUnknownReply,
+        }
+
+        // handle success
+        var body: SuccessfulyConnectionSetupReplyBody = undefined;
+        try self.read(&body);
+
+        // TODO for now we just ignore the rest of the reply
+        var buf: [65536] u8 = undefined;
+        const bytes_Read = try self.stream.read(buf[0..body.additional_data_length_4bytes*4]);
+        if (bytes_Read != body.additional_data_length_4bytes*4) {
+            // failed to skip connection setup reply
+            return Error.ProtocolReadError;
+        }
     }
 
-    pub fn write(self: Connection, data: anytype) !void {
+    fn write(self: Connection, data: anytype) !void {
         var slice: []const u8 = undefined;
         slice.ptr = @ptrCast(&data);
         slice.len = @sizeOf(@TypeOf(data));
-        // std.debug.print("wr: {any}\n", .{slice}); // debug
         const written = try self.stream.write(slice);
         if (slice.len != written) return Error.ProtocolWriteError;
     }
 
     fn read(self: Connection, buffer: anytype) !void {
-        var slice: [] u8 = undefined;
+        var slice: []u8 = undefined;
         slice.ptr = @ptrCast(buffer);
         slice.len = @sizeOf(@TypeOf(buffer.*));
         const bytes_read = try self.stream.read(slice);
         if (slice.len != bytes_read) return Error.ProtocolReadError;
     }
+
+};
+
+const ConnectionSetupReplyStatus = extern struct {
+    /// 0 - failed, 1 - success, 2 - authenticate
+    code: u8,
+    // when status is 0, it contains the length of the reason, otherwise unused
+    reason_len: u8, 
+};
+
+const SuccessfulyConnectionSetupReplyBody = extern struct {
+
+    ///  2     CARD16 protocol-major-version
+    protocol_major_version: u16,
+    
+    ///  2     CARD16 protocol-minor-version
+    protocol_minor_version: u16,
+
+    ///  2 8+2n+(v+p+m)/4  length in 4-byte units of "additional data"     
+    additional_data_length_4bytes: u16,
+
+    // ///  4     CARD32                          release-number
+    // release_number: u32,
+
+    // ///  4     CARD32                          resource-id-base
+    // resource_id_base: u32,
+
+    // ///  4     CARD32                          resource-id-mask
+    // resource_id_mask: u32,
+
+    // ///  4     CARD32                          motion-buffer-size
+    // motion_buffer_size: u32,
+
+    // ///  2     v                               length of vendor
+    // vendor_length: u16,
+
+    // ///  2     CARD16                          maximum-request-length
+    // max_request_length: u16,
+
+    // ///  1     CARD8                           number of SCREENs in roots
+    // number_of_SCREENs_in_roots: u8,
+
+    // ///  1     n                               number for FORMATs in
+    // ///                                        pixmap-formats
+    // number_of_FORMATs_in_pixmap_formats: u8,
+
+    // ///  1                                     image-byte-order
+    // ///       0     LSBFirst
+    // ///       1     MSBFirst
+    // image_byte_order: u8, // 0 - LSBFirst, 1 - MSB-First
+
+    // ///  1                                     bitmap-format-bit-order
+    // ///       0     LeastSignificant
+    // ///       1     MostSignificant
+    // bitmap_format_bit_order: u8, // 0 - LSBFirst, 1 - MSB-First
+
+    // ///  1     CARD8                           bitmap-format-scanline-unit
+    // bitmap_format_scanline_unit: u8,
+
+    // ///  1     CARD8                           bitmap-format-scanline-pad
+    // bitmap_format_scanline_pad: u8,
+
+    // ///  1     KEYCODE                         min-keycode
+    // min_keycode: u8,
+
+    // ///  1     KEYCODE                         max-keycode
+    // max_keycode: u8,
+
+    // ///  4                                     unused
+    // unused: u32,
 };
 
 /// https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#Connection_Setup
-const InitRequest = extern struct {
+const ConnectionSetupRequest = extern struct {
     byte_order: u8,
     _unused_1: u8 = undefined,
     protocol_major_version: u16 = 11,
@@ -79,12 +163,60 @@ const InitRequest = extern struct {
     auth_protocol_data_len: u16 = 0,
     _unused_2: u16 = undefined,
 
-    fn init() InitRequest {
-        return InitRequest{ .byte_order = switch (builtin.target.cpu.arch.endian()) {
+    fn init() ConnectionSetupRequest {
+        const endiannes = builtin.target.cpu.arch.endian();
+        return ConnectionSetupRequest{ .byte_order = switch (endiannes) {
             .little => 0x6c,
             .big => 0x42,
         } };
     }
+};
+
+const CreateWindowRequest = extern struct {
+    opcode: u8 = 1,
+    depth: u8 = 32,
+    /// 8 + n
+    request_length: u16 = 8,
+    wid: u32 = 0,
+    parent: u32 = 0,
+    x: i16 = 64,
+    y: i16 = 64,
+    width: u16 = 400,
+    height: u16 = 300,
+    border_width: u16 = 0,
+///           0     CopyFromParent
+///           1     InputOutput
+///           2     InputOnly
+    class: u16 = 0,
+    /// 4     VISUALID                        visual
+    ///      0     CopyFromParent
+    visual: u32 = 0,
+    ///  4     BITMASK                         value-mask (has n bits set to 1)
+    ///       #x00000001     background-pixmap
+    ///       #x00000002     background-pixel
+    ///       #x00000004     border-pixmap
+    ///       #x00000008     border-pixel
+    ///       #x00000010     bit-gravity
+    ///       #x00000020     win-gravity
+    ///       #x00000040     backing-store
+    ///       #x00000080     backing-planes
+    ///       #x00000100     backing-pixel
+    ///       #x00000200     override-redirect
+    ///       #x00000400     save-under
+    ///       #x00000800     event-mask
+    ///       #x00001000     do-not-propagate-mask
+    ///       #x00002000     colormap
+    ///       #x00004000     cursor
+    bitmask: u32 = 0,
+    // TODO
+    // 4n     LISTofVALUE                    value-list
+};
+
+const MapWindowRequest = extern struct {
+    opcode: u8 = 8,
+    unused: u8 = undefined,
+    request_len: u16 = 2,
+    window: u32 = 0,
 };
 
 fn createDisplayServerStream(server: Display) !std.net.Stream {

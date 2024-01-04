@@ -6,6 +6,9 @@ const rx11 = @import("./src/window/adapters/rx11.zig");
 
 pub fn main() !void {
     var conn = try rx11.Connection.init();
-    conn.thing();
     defer conn.deinit();
+
+    try rx11.createWindow(conn);
+    try rx11.mapWindow(conn);
+    std.time.sleep(1_000_000_000);
 }
