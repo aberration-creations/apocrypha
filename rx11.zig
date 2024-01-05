@@ -10,5 +10,7 @@ pub fn main() !void {
 
     try rx11.createWindow(conn);
     try rx11.mapWindow(conn);
+    try rx11.pollEvents(conn);
     std.time.sleep(1_000_000_000);
+    try rx11.pollEvents(conn);
 }

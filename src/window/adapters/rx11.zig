@@ -4,7 +4,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-pub const Error = error{
+pub const Err = error{
     DisplayNotFound,
     DisplayParseError,
     ProtocolNotSupported,
@@ -22,6 +22,48 @@ pub fn createWindow(conn: Connection) !void {
 pub fn mapWindow(conn: Connection) !void {
     try conn.write(MapWindowRequest{});
 }
+
+pub fn pollEvents(conn: Connection) !void {
+
+    var r: Response = undefined;
+    while (try conn.poll())
+    {
+        try conn.read(&r);
+        if (r.opcode == 0) 
+        {
+            // is error
+            const e: *Error = @ptrCast(&r);
+            std.debug.print("{}\n", .{ e });
+        }
+        else if (r.opcode == 1)
+        {
+            // is reply
+        }
+        else {
+            // is event
+
+        }
+    }
+}
+
+pub const Response = extern struct {
+    opcode: u8,
+    unknown_1: u8,
+    sequence_number: u16,
+    unknown_2: u32,
+    unknown_3: [6]u32,
+};
+
+pub const Error = extern struct {
+    opcode: u8 = 0,
+    code: u8,
+    sequence_number: u16,
+    unknown: u32,
+    minor_opcode: u16,
+    major_opcode: u8,
+    unused_1: u8,
+    unused_2: [5]u32,
+};
 
 pub const Connection = struct {
     stream: std.net.Stream,
@@ -47,22 +89,22 @@ pub const Connection = struct {
         try self.read(&status);
 
         switch (status.code) {
-            0 => return Error.ConnectionSetupFailed, // TODO get reason
+            0 => return Err.ConnectionSetupFailed, // TODO get reason
             1 => {}, // success!
-            2 => return Error.ConnectionSetupNeedsAuthenticate, // TODO what auth?
-            else => return Error.ConnectionSetupUnknownReply,
+            2 => return Err.ConnectionSetupNeedsAuthenticate, // TODO what auth?
+            else => return Err.ConnectionSetupUnknownReply,
         }
 
         // handle success
         var body: SuccessfulyConnectionSetupReplyBody = undefined;
-        try self.read(&body);
+        _ = try self.read(&body);
 
         // TODO for now we just ignore the rest of the reply
         var buf: [65536] u8 = undefined;
         const bytes_Read = try self.stream.read(buf[0..body.additional_data_length_4bytes*4]);
         if (bytes_Read != body.additional_data_length_4bytes*4) {
             // failed to skip connection setup reply
-            return Error.ProtocolReadError;
+            return Err.ProtocolReadError;
         }
     }
 
@@ -71,7 +113,16 @@ pub const Connection = struct {
         slice.ptr = @ptrCast(&data);
         slice.len = @sizeOf(@TypeOf(data));
         const written = try self.stream.write(slice);
-        if (slice.len != written) return Error.ProtocolWriteError;
+        if (slice.len != written) return Err.ProtocolWriteError;
+    }
+
+    fn poll(self: Connection) !bool {
+        var nfo = [1]std.os.linux.pollfd { std.os.linux.pollfd{
+            .fd = self.stream.handle,
+            .events = 1, // POLLIN
+            .revents = 0,
+        } };
+        return try std.os.poll(&nfo, 0) != 0;
     }
 
     fn read(self: Connection, buffer: anytype) !void {
@@ -79,7 +130,7 @@ pub const Connection = struct {
         slice.ptr = @ptrCast(buffer);
         slice.len = @sizeOf(@TypeOf(buffer.*));
         const bytes_read = try self.stream.read(slice);
-        if (slice.len != bytes_read) return Error.ProtocolReadError;
+        if (slice.len != bytes_read) return Err.ProtocolReadError;
     }
 
 };
@@ -177,7 +228,7 @@ const CreateWindowRequest = extern struct {
     depth: u8 = 32,
     /// 8 + n
     request_length: u16 = 8,
-    wid: u32 = 0,
+    wid: u32 = 4,
     parent: u32 = 0,
     x: i16 = 64,
     y: i16 = 64,
@@ -216,7 +267,7 @@ const MapWindowRequest = extern struct {
     opcode: u8 = 8,
     unused: u8 = undefined,
     request_len: u16 = 2,
-    window: u32 = 0,
+    window: u32 = 4,
 };
 
 fn createDisplayServerStream(server: Display) !std.net.Stream {
@@ -226,9 +277,27 @@ fn createDisplayServerStream(server: Display) !std.net.Stream {
         return try std.net.connectUnixSocket(path);
     } else {
         // TODO handle connect network tcp socket
-        return Error.ProtocolNotSupported;
+        return Err.ProtocolNotSupported;
     }
 }
+
+// if we manually async
+// fn connectUnixSocket(path: []const u8) !std.net.Stream {
+//     const os = std.os;
+//     const sockfd = try os.socket(
+//         os.AF.UNIX,
+//         os.SOCK.STREAM | os.SOCK.CLOEXEC | std.os.SOCK.NONBLOCK,
+//         0,
+//     );
+//     errdefer os.closeSocket(sockfd);
+
+//     var addr = try std.net.Address.initUnix(path);
+//     try os.connect(sockfd, &addr.any, addr.getOsSockLen());
+
+//     return std.net.Stream{
+//         .handle = sockfd,
+//     };
+// }
 
 fn destroyDisplayServerStream(stream: std.net.Stream) void {
     stream.close();
@@ -245,7 +314,7 @@ fn getDisplayServerInfo() !Display {
     if (std.os.getenv("DISPLAY")) |display| {
         return parseDisplay(display);
     }
-    return Error.DisplayNotFound;
+    return Err.DisplayNotFound;
 }
 
 fn parseDisplay(str: []const u8) !Display {
@@ -266,13 +335,13 @@ fn parseDisplay(str: []const u8) !Display {
             cursor = i + 1;
             expect_display = true;
         } else if (chr == '.') {
-            result.display = std.fmt.parseInt(u8, str[cursor..i], 10) catch return Error.DisplayParseError;
+            result.display = std.fmt.parseInt(u8, str[cursor..i], 10) catch return Err.DisplayParseError;
             cursor = i + 1;
             expect_display = false;
             expect_screen = true;
         }
     }
-    const last_value = std.fmt.parseInt(u8, str[cursor..str.len], 10) catch return Error.DisplayParseError;
+    const last_value = std.fmt.parseInt(u8, str[cursor..str.len], 10) catch return Err.DisplayParseError;
     if (expect_screen) result.screen = last_value;
     if (expect_display) result.display = last_value;
     return result;
@@ -296,7 +365,7 @@ test "parse display" {
     try eq(Display{ .host = "host", .protocol = "unix", .display = 1, .screen = 2 }, try parse("host/unix:1.2"));
     try eq(Display{ .display = 1 }, try parse(":1"));
     const ee = std.testing.expectError;
-    try ee(Error.DisplayParseError, parse(":A.B"));
+    try ee(Err.DisplayParseError, parse(":A.B"));
 }
 
 test "is unix protocol" {
@@ -306,4 +375,13 @@ test "is unix protocol" {
     try expect(isUnix(try parse("host/unix:1.2")));
     try expect(!isUnix(try parse("localhost:12.0")));
     try expect(isUnix(try parse(":1")));
+}
+
+test "struct sizes are as expected" {
+    // this is important as we are communicating over binary procotol
+    // the struct size need to be perfectly aligned
+    const expect = std.testing.expect;
+    try expect(@sizeOf(Response) == 32);
+    try expect(@sizeOf(Error) == 32);
+    
 }
