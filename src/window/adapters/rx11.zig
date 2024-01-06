@@ -15,31 +15,25 @@ pub const Err = error{
     ConnectionSetupUnknownReply,
 };
 
-pub fn createWindow(conn: Connection) !void {
-    try conn.write(CreateWindowRequest{});
+pub fn createWindow(conn: Connection, window_id: u32) !void {
+    try conn.write(CreateWindowRequest{ .wid = window_id });
 }
 
-pub fn mapWindow(conn: Connection) !void {
-    try conn.write(MapWindowRequest{});
+pub fn mapWindow(conn: Connection, window_id: u32) !void {
+    try conn.write(MapWindowRequest{ .window = window_id });
 }
 
 pub fn pollEvents(conn: Connection) !void {
-
     var r: Response = undefined;
-    while (try conn.poll())
-    {
+    while (try conn.poll()) {
         try conn.read(&r);
-        if (r.opcode == 0) 
-        {
+        if (r.opcode == 0) {
             // is error
             const e: *Error = @ptrCast(&r);
-            std.debug.print("{}\n", .{ e });
-        }
-        else if (r.opcode == 1)
-        {
+            std.debug.print("{}\n", .{e});
+        } else if (r.opcode == 1) {
             // is reply
-        }
-        else {
+        } else {
             // is event
 
         }
@@ -67,10 +61,11 @@ pub const Error = extern struct {
 
 pub const Connection = struct {
     stream: std.net.Stream,
+    id_generator: IdGenerator = IdGenerator {},
 
     pub fn init() !Connection {
         const server = try getDisplayServerInfo();
-        const self = Connection{
+        var self = Connection{
             .stream = try createDisplayServerStream(server),
         };
         errdefer destroyDisplayServerStream(self.stream);
@@ -82,7 +77,11 @@ pub const Connection = struct {
         destroyDisplayServerStream(self.stream);
     }
 
-    fn setupConnection(self: Connection) !void {
+    pub fn generateResourceId(self: Connection) u32 {
+        return self.id_generator.generateId();
+    }
+
+    fn setupConnection(self: *Connection) !void {
         try self.write(ConnectionSetupRequest.init());
 
         var status: ConnectionSetupReplyStatus = undefined;
@@ -96,19 +95,31 @@ pub const Connection = struct {
         }
 
         // handle success
-        var body: SuccessfulyConnectionSetupReplyBody = undefined;
+        var body: SuccessfullConnectionHeader = undefined;
         _ = try self.read(&body);
 
+        var additional: SuccessfulConnectionHeaderAdditional = undefined;
+        _ = try self.read(&additional);
+
         // TODO for now we just ignore the rest of the reply
-        var buf: [65536] u8 = undefined;
-        const bytes_Read = try self.stream.read(buf[0..body.additional_data_length_4bytes*4]);
-        if (bytes_Read != body.additional_data_length_4bytes*4) {
+        var buf: [65536]u8 = undefined;
+        const rest_size: usize = (body.additional_data_length_4bytes) * 4 - @sizeOf(SuccessfulConnectionHeaderAdditional);
+        const bytes_Read = try self.stream.read(buf[0..rest_size]);
+
+        if (bytes_Read != rest_size) {
             // failed to skip connection setup reply
             return Err.ProtocolReadError;
         }
+
+
+        std.debug.print(" {} \n", .{ additional });
+        std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
+        self.id_generator.base = additional.resource_id_base;
+        self.id_generator.mask = additional.resource_id_mask;
     }
 
     fn write(self: Connection, data: anytype) !void {
+        std.debug.print("writng {}\n", .{ data });
         var slice: []const u8 = undefined;
         slice.ptr = @ptrCast(&data);
         slice.len = @sizeOf(@TypeOf(data));
@@ -117,11 +128,11 @@ pub const Connection = struct {
     }
 
     fn poll(self: Connection) !bool {
-        var nfo = [1]std.os.linux.pollfd { std.os.linux.pollfd{
+        var nfo = [1]std.os.linux.pollfd{std.os.linux.pollfd{
             .fd = self.stream.handle,
             .events = 1, // POLLIN
             .revents = 0,
-        } };
+        }};
         return try std.os.poll(&nfo, 0) != 0;
     }
 
@@ -132,76 +143,89 @@ pub const Connection = struct {
         const bytes_read = try self.stream.read(slice);
         if (slice.len != bytes_read) return Err.ProtocolReadError;
     }
+};
 
+const IdGenerator = struct {
+    mask: u32 = 0,
+    base: u32 = 0,
+
+    fn generateId(self: IdGenerator) u32 {
+        std.debug.print("base {b} mask {b} \n", .{self.base, self.mask});
+        var id: u32 = 1;
+        id &= self.mask;
+        id |= self.base;
+        return id;
+    }
 };
 
 const ConnectionSetupReplyStatus = extern struct {
     /// 0 - failed, 1 - success, 2 - authenticate
     code: u8,
     // when status is 0, it contains the length of the reason, otherwise unused
-    reason_len: u8, 
+    reason_len: u8,
 };
 
-const SuccessfulyConnectionSetupReplyBody = extern struct {
-
+const SuccessfullConnectionHeader = extern struct {
     ///  2     CARD16 protocol-major-version
     protocol_major_version: u16,
-    
+
     ///  2     CARD16 protocol-minor-version
     protocol_minor_version: u16,
 
-    ///  2 8+2n+(v+p+m)/4  length in 4-byte units of "additional data"     
+    ///  2 8+2n+(v+p+m)/4  length in 4-byte units of "additional data"
     additional_data_length_4bytes: u16,
+};
 
-    // ///  4     CARD32                          release-number
-    // release_number: u32,
+const SuccessfulConnectionHeaderAdditional = extern struct {
+    ///  4     CARD32                          release-number
+    release_number: u32,
 
     // ///  4     CARD32                          resource-id-base
-    // resource_id_base: u32,
+    resource_id_base: u32,
 
     // ///  4     CARD32                          resource-id-mask
-    // resource_id_mask: u32,
+    resource_id_mask: u32,
 
-    // ///  4     CARD32                          motion-buffer-size
-    // motion_buffer_size: u32,
+    ///  4     CARD32                          motion-buffer-size
+    motion_buffer_size: u32,
 
-    // ///  2     v                               length of vendor
-    // vendor_length: u16,
+    ///  2     v                               length of vendor
+    vendor_length: u16,
 
-    // ///  2     CARD16                          maximum-request-length
-    // max_request_length: u16,
+    ///  2     CARD16                          maximum-request-length
+    max_request_length: u16,
 
-    // ///  1     CARD8                           number of SCREENs in roots
-    // number_of_SCREENs_in_roots: u8,
+    ///  1     CARD8                           number of SCREENs in roots
+    number_of_SCREENs_in_roots: u8,
 
-    // ///  1     n                               number for FORMATs in
-    // ///                                        pixmap-formats
-    // number_of_FORMATs_in_pixmap_formats: u8,
+    ///  1     n                               number for FORMATs in
+    ///                                        pixmap-formats
+    number_of_FORMATs_in_pixmap_formats: u8,
 
-    // ///  1                                     image-byte-order
-    // ///       0     LSBFirst
-    // ///       1     MSBFirst
-    // image_byte_order: u8, // 0 - LSBFirst, 1 - MSB-First
+    ///  1                                     image-byte-order
+    ///       0     LSBFirst
+    ///       1     MSBFirst
+    image_byte_order: u8, // 0 - LSBFirst, 1 - MSB-First
 
-    // ///  1                                     bitmap-format-bit-order
-    // ///       0     LeastSignificant
-    // ///       1     MostSignificant
-    // bitmap_format_bit_order: u8, // 0 - LSBFirst, 1 - MSB-First
+    ///  1                                     bitmap-format-bit-order
+    ///       0     LeastSignificant
+    ///       1     MostSignificant
+    bitmap_format_bit_order: u8, // 0 - LSBFirst, 1 - MSB-First
 
-    // ///  1     CARD8                           bitmap-format-scanline-unit
-    // bitmap_format_scanline_unit: u8,
+    ///  1     CARD8                           bitmap-format-scanline-unit
+    bitmap_format_scanline_unit: u8,
 
-    // ///  1     CARD8                           bitmap-format-scanline-pad
-    // bitmap_format_scanline_pad: u8,
+    ///  1     CARD8                           bitmap-format-scanline-pad
+    bitmap_format_scanline_pad: u8,
 
-    // ///  1     KEYCODE                         min-keycode
-    // min_keycode: u8,
+    ///  1     KEYCODE                         min-keycode
+    min_keycode: u8,
 
-    // ///  1     KEYCODE                         max-keycode
-    // max_keycode: u8,
+    ///  1     KEYCODE                         max-keycode
+    max_keycode: u8,
 
-    // ///  4                                     unused
-    // unused: u32,
+    ///  4                                     unused
+    unused: u32,
 };
 
 /// https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#Connection_Setup
@@ -228,16 +252,16 @@ const CreateWindowRequest = extern struct {
     depth: u8 = 32,
     /// 8 + n
     request_length: u16 = 8,
-    wid: u32 = 4,
+    wid: u32,
     parent: u32 = 0,
     x: i16 = 64,
     y: i16 = 64,
     width: u16 = 400,
     height: u16 = 300,
     border_width: u16 = 0,
-///           0     CopyFromParent
-///           1     InputOutput
-///           2     InputOnly
+    ///           0     CopyFromParent
+    ///           1     InputOutput
+    ///           2     InputOnly
     class: u16 = 0,
     /// 4     VISUALID                        visual
     ///      0     CopyFromParent
@@ -267,7 +291,7 @@ const MapWindowRequest = extern struct {
     opcode: u8 = 8,
     unused: u8 = undefined,
     request_len: u16 = 2,
-    window: u32 = 4,
+    window: u32,
 };
 
 fn createDisplayServerStream(server: Display) !std.net.Stream {
@@ -383,5 +407,4 @@ test "struct sizes are as expected" {
     const expect = std.testing.expect;
     try expect(@sizeOf(Response) == 32);
     try expect(@sizeOf(Error) == 32);
-    
 }

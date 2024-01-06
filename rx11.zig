@@ -8,8 +8,9 @@ pub fn main() !void {
     var conn = try rx11.Connection.init();
     defer conn.deinit();
 
-    try rx11.createWindow(conn);
-    try rx11.mapWindow(conn);
+    const window_id = conn.generateResourceId();
+    try rx11.createWindow(conn, window_id);
+    try rx11.mapWindow(conn, window_id);
     try rx11.pollEvents(conn);
     std.time.sleep(1_000_000_000);
     try rx11.pollEvents(conn);
