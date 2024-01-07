@@ -16,7 +16,10 @@ pub const Err = error{
 };
 
 pub fn createWindow(conn: Connection, window_id: u32) !void {
-    try conn.write(CreateWindowRequest{ .wid = window_id });
+    try conn.write(CreateWindowRequest{ 
+        .wid = window_id, 
+        .parent = conn.first_screen_id,
+    });
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -62,10 +65,12 @@ pub const Error = extern struct {
 pub const Connection = struct {
     stream: std.net.Stream,
     id_generator: IdGenerator = IdGenerator {},
+    first_screen_id: u32,
 
     pub fn init() !Connection {
         const server = try getDisplayServerInfo();
         var self = Connection{
+            .first_screen_id = 0,
             .stream = try createDisplayServerStream(server),
         };
         errdefer destroyDisplayServerStream(self.stream);
@@ -111,9 +116,31 @@ pub const Connection = struct {
             return Err.ProtocolReadError;
         }
 
+        const vendor_name = buf[0..additional.vendor_length];
+        std.debug.print("vendor {s}\n", .{vendor_name});
+        std.debug.print("vendor {any}\n", .{vendor_name});
 
-        std.debug.print(" {} \n", .{ additional });
-        std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
+        const formats_offset = pad4(vendor_name.len);
+        std.debug.print("formats offset {}\n", .{formats_offset});
+        const formats_len = 8*additional.number_of_FORMATs_in_pixmap_formats;
+        const formats_buf = buf[formats_offset..formats_len];
+        // _ = formats_buf;
+        var formats: []Format = undefined;
+        formats.ptr = @ptrCast(formats_buf.ptr);
+        formats.len = additional.number_of_FORMATs_in_pixmap_formats;
+        std.debug.print("FORMATS: {any}\n", .{formats});
+
+        const screens_offset = formats_offset + formats_len;
+        const screens_buf = buf[screens_offset..buf.len];
+
+        const screen: *Screen = @alignCast(@ptrCast(screens_buf.ptr));
+        std.debug.print("SCREEN: {}\n", .{screen});
+
+        self.first_screen_id = screen.root;
+
+
+        // std.debug.print(" {} \n", .{ additional });
+        // std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
         self.id_generator.base = additional.resource_id_base;
         self.id_generator.mask = additional.resource_id_mask;
     }
@@ -145,12 +172,62 @@ pub const Connection = struct {
     }
 };
 
+const Screen = extern struct {
+    ///  4     WINDOW                          root
+    root: u32,
+    ///  4     COLORMAP                        default-colormap
+    default_colormap: u32,
+    ///  4     CARD32                          white-pixel
+    white_pixel: u32,
+    ///  4     CARD32                          black-pixel
+    black_pixel: u32,
+    ///  4     SETofEVENT                      current-input-masks
+    current_input_masks: u32,
+    ///  2     CARD16                          width-in-pixels
+    width_in_pixels: u16,
+    ///  2     CARD16                          height-in-pixels
+    height_in_pixels: u16,
+    ///  2     CARD16                          width-in-millimeters
+    width_in_millimeters: u16,
+    ///  2     CARD16                          height-in-millimeters
+    height_in_millimeters: u16,
+    ///  2     CARD16                          min-installed-maps
+    min_installed_maps: u16,
+    ///  2     CARD16                          max-installed-maps
+    max_installed_maps: u16,
+    ///  4     VISUALID                        root-visual
+    root_visual: u32,
+    ///  1                                     backing-stores
+    ///       0     Never
+    ///       1     WhenMapped
+    ///       2     Always
+    backing_stores: u8,
+    ///  1     BOOL                            save-unders
+    save_unders: u8,
+    ///  1     CARD8                           root-depth
+    root_depth: u8,
+    ///  1     CARD8                           number of DEPTHs in allowed-depths
+    number_of_allowed_depths: u8,
+    // followed by list of allowed depths...
+};
+
+const Format = extern struct {
+    depth: u8,
+    bpp: u8,
+    scanline_pad: u8,
+    unused: [5]u8,
+};
+
+fn pad4(size: usize) usize {
+    return size + ((0b100 - (size & 0b11)) & 0b11);
+}
+
 const IdGenerator = struct {
     mask: u32 = 0,
     base: u32 = 0,
 
     fn generateId(self: IdGenerator) u32 {
-        std.debug.print("base {b} mask {b} \n", .{self.base, self.mask});
+        // TODO generate more than 1 id
         var id: u32 = 1;
         id &= self.mask;
         id |= self.base;
@@ -228,6 +305,8 @@ const SuccessfulConnectionHeaderAdditional = extern struct {
     unused: u32,
 };
 
+
+
 /// https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#Connection_Setup
 const ConnectionSetupRequest = extern struct {
     byte_order: u8,
@@ -249,7 +328,7 @@ const ConnectionSetupRequest = extern struct {
 
 const CreateWindowRequest = extern struct {
     opcode: u8 = 1,
-    depth: u8 = 32,
+    depth: u8 = 24,
     /// 8 + n
     request_length: u16 = 8,
     wid: u32,
@@ -304,24 +383,6 @@ fn createDisplayServerStream(server: Display) !std.net.Stream {
         return Err.ProtocolNotSupported;
     }
 }
-
-// if we manually async
-// fn connectUnixSocket(path: []const u8) !std.net.Stream {
-//     const os = std.os;
-//     const sockfd = try os.socket(
-//         os.AF.UNIX,
-//         os.SOCK.STREAM | os.SOCK.CLOEXEC | std.os.SOCK.NONBLOCK,
-//         0,
-//     );
-//     errdefer os.closeSocket(sockfd);
-
-//     var addr = try std.net.Address.initUnix(path);
-//     try os.connect(sockfd, &addr.any, addr.getOsSockLen());
-
-//     return std.net.Stream{
-//         .handle = sockfd,
-//     };
-// }
 
 fn destroyDisplayServerStream(stream: std.net.Stream) void {
     stream.close();
@@ -407,4 +468,15 @@ test "struct sizes are as expected" {
     const expect = std.testing.expect;
     try expect(@sizeOf(Response) == 32);
     try expect(@sizeOf(Error) == 32);
+    try expect(@sizeOf(Format) == 8);
+}
+
+test "pad4 works as expected" {
+    const expect = std.testing.expect;
+    try expect(pad4(0) == 0);
+    try expect(pad4(1) == 4);
+    try expect(pad4(2) == 4);
+    try expect(pad4(3) == 4);
+    try expect(pad4(4) == 4);
+    try expect(pad4(5) == 8);
 }
