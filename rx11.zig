@@ -11,7 +11,15 @@ pub fn main() !void {
     const window_id = conn.generateResourceId();
     try rx11.createWindow(conn, window_id);
     try rx11.mapWindow(conn, window_id);
+    try rx11.setName(conn, window_id, "X11 Test Window");
     try rx11.pollEvents(conn);
     std.time.sleep(1_000_000_000);
     try rx11.pollEvents(conn);
+    std.time.sleep(1_000_000_000);
+
+    try rx11.setName(conn, window_id, "Other title");
+    try rx11.pollEvents(conn);
+    std.time.sleep(1_000_000_000);
+    try rx11.pollEvents(conn);
+    std.time.sleep(1_000_000_000);
 }

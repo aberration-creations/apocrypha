@@ -16,14 +16,31 @@ pub const Err = error{
 };
 
 pub fn createWindow(conn: Connection, window_id: u32) !void {
-    try conn.write(CreateWindowRequest{ 
+    try conn.writeStruct(CreateWindowRequest{ 
         .wid = window_id, 
         .parent = conn.first_screen_id,
     });
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
-    try conn.write(MapWindowRequest{ .window = window_id });
+    try conn.writeStruct(MapWindowRequest{ .window = window_id });
+}
+
+pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
+    const n = title.len;
+    const p = pad4of(n);
+    const request_len = 6 + (n + p) / 4;
+    const pad_bytes: [4]u8 = undefined;
+    try conn.writeStruct(ChangePropertyRequest{ 
+        .window = window_id,
+        .request_len = @intCast(request_len),
+        .property = WM_NAME,
+        .property_type = STRING,
+        .format = 8,
+        .data_len = @intCast(title.len),
+    });
+    try conn.writeBytes(title);
+    try conn.writeBytes(pad_bytes[0..p]);
 }
 
 pub fn pollEvents(conn: Connection) !void {
@@ -36,12 +53,48 @@ pub fn pollEvents(conn: Connection) !void {
             std.debug.print("{}\n", .{e});
         } else if (r.opcode == 1) {
             // is reply
+            std.debug.print("unhandled reply\n", .{});
         } else {
             // is event
-
+            std.debug.print("unhandled event\n", .{});
         }
     }
 }
+
+pub const ChangePropertyRequest = extern struct {
+    /// ChangeProperty
+    ///  1     18                              opcode
+    opcode: u8 = 18,
+    ///  1                                     mode
+    ///       0     Replace
+    ///       1     Prepend
+    ///       2     Append
+    mode: u8 = 0, // replace
+    ///  2     6+(n+p)/4                       request length
+    request_len: u16,
+    ///  4     WINDOW                          window
+    window: u32,
+    ///  4     ATOM                            property
+    property: u32,
+    ///  4     ATOM                            type
+    property_type: u32,
+    ///  1     CARD8                           format = 8 or 16 or 32
+    format: u8 = 8,
+    ///  3                                     unused
+    unused: [3]u8 = undefined, 
+    ///  4     CARD32                          length of data in format units
+    ///                 (= n for format = 8)
+    ///                 (= n/2 for format = 16)
+    ///                 (= n/4 for format = 32)
+    data_len: u32,
+
+    // must be followed by:
+    //  n     LISTofBYTE                      data
+    //                 (n is a multiple of 2 for format = 16)
+    //                 (n is a multiple of 4 for format = 32)
+    //  p                                     unused, p=pad(n)
+
+};
 
 pub const Response = extern struct {
     opcode: u8,
@@ -87,7 +140,7 @@ pub const Connection = struct {
     }
 
     fn setupConnection(self: *Connection) !void {
-        try self.write(ConnectionSetupRequest.init());
+        try self.writeStruct(ConnectionSetupRequest.init());
 
         var status: ConnectionSetupReplyStatus = undefined;
         try self.read(&status);
@@ -117,24 +170,18 @@ pub const Connection = struct {
         }
 
         const vendor_name = buf[0..additional.vendor_length];
-        std.debug.print("vendor {s}\n", .{vendor_name});
-        std.debug.print("vendor {any}\n", .{vendor_name});
 
         const formats_offset = pad4(vendor_name.len);
-        std.debug.print("formats offset {}\n", .{formats_offset});
         const formats_len = 8*additional.number_of_FORMATs_in_pixmap_formats;
         const formats_buf = buf[formats_offset..formats_len];
-        // _ = formats_buf;
         var formats: []Format = undefined;
         formats.ptr = @ptrCast(formats_buf.ptr);
         formats.len = additional.number_of_FORMATs_in_pixmap_formats;
-        std.debug.print("FORMATS: {any}\n", .{formats});
 
         const screens_offset = formats_offset + formats_len;
         const screens_buf = buf[screens_offset..buf.len];
 
         const screen: *Screen = @alignCast(@ptrCast(screens_buf.ptr));
-        std.debug.print("SCREEN: {}\n", .{screen});
 
         self.first_screen_id = screen.root;
 
@@ -145,13 +192,16 @@ pub const Connection = struct {
         self.id_generator.mask = additional.resource_id_mask;
     }
 
-    fn write(self: Connection, data: anytype) !void {
-        std.debug.print("writng {}\n", .{ data });
+    fn writeStruct(self: Connection, data: anytype) !void {
         var slice: []const u8 = undefined;
         slice.ptr = @ptrCast(&data);
         slice.len = @sizeOf(@TypeOf(data));
-        const written = try self.stream.write(slice);
-        if (slice.len != written) return Err.ProtocolWriteError;
+        return self.writeBytes(slice);
+    }
+
+    fn writeBytes(self: Connection, data: []const u8) !void {
+        const written = try self.stream.write(data);
+        if (data.len != written) return Err.ProtocolWriteError;
     }
 
     fn poll(self: Connection) !bool {
@@ -219,7 +269,11 @@ const Format = extern struct {
 };
 
 fn pad4(size: usize) usize {
-    return size + ((0b100 - (size & 0b11)) & 0b11);
+    return size + pad4of(size);
+}
+
+fn pad4of(size: usize) u8 {
+    return @intCast(((0b100 - (size & 0b11)) & 0b11));
 }
 
 const IdGenerator = struct {
@@ -443,6 +497,76 @@ fn streql(a: []const u8, b: []const u8) bool {
     return true;
 }
 
+const PRIMARY = 1;
+const SECONDARY = 2;
+const ARC = 3;
+const ATOM = 4;
+const BITMAP = 5;
+const CARDINAL = 6;
+const COLORMAP = 7;
+const CURSOR = 8;
+const CUT_BUFFER0 = 9;
+const CUT_BUFFER1 = 10;
+const CUT_BUFFER2 = 11;
+const CUT_BUFFER3 = 12;
+const CUT_BUFFER4 = 13;
+const CUT_BUFFER5 = 14;
+const CUT_BUFFER6 = 15;
+const CUT_BUFFER7 = 16;
+const DRAWABLE = 17;
+const FONT = 18;
+const INTEGER = 19;
+const PIXMAP = 20;
+const POINT = 21;
+const RECTANGLE = 22;
+const RESOURCE_MANAGER = 23;
+const RGB_COLOR_MAP = 24;
+const RGB_BEST_MAP = 25;
+const RGB_BLUE_MAP = 26;
+const RGB_DEFAULT_MAP = 27;
+const RGB_GRAY_MAP = 28;
+const RGB_GREEN_MAP = 29;
+const RGB_RED_MAP = 30;
+const STRING = 31;
+const VISUALID = 32;
+const WINDOW = 33;
+const WM_COMMAND = 34;
+const WM_HINTS = 35;
+const WM_CLIENT_MACHINE = 36;
+const WM_ICON_NAME = 37;
+const WM_ICON_SIZE = 38;
+const WM_NAME = 39;
+const WM_NORMAL_HINTS = 40;
+const WM_SIZE_HINTS = 41;
+const WM_ZOOM_HINTS = 42;
+const MIN_SPACE = 43;
+const NORM_SPACE = 44;
+const MAX_SPACE = 45;
+const END_SPACE = 46;
+const SUPERSCRIPT_X = 47;
+const SUPERSCRIPT_Y = 48;
+const SUBSCRIPT_X = 49;
+const SUBSCRIPT_Y = 50;
+const UNDERLINE_POSITION = 51;
+const UNDERLINE_THICKNESS = 52;
+const STRIKEOUT_ASCENT = 53;
+const STRIKEOUT_DESCENT = 54;
+const ITALIC_ANGLE = 55;
+const X_HEIGHT = 56;
+const QUAD_WIDTH = 57;
+const WEIGHT = 58;
+const POINT_SIZE = 59;
+const RESOLUTION = 60;
+const COPYRIGHT = 61;
+const NOTICE = 62;
+const FONT_NAME = 63;
+const FAMILY_NAME = 64;
+const FULL_NAME = 65;
+const CAP_HEIGHT = 66;
+const WM_CLASS = 67;
+const WM_TRANSIENT_FOR = 68;
+
+
 test "parse display" {
     const parse = parseDisplay;
     const eq = std.testing.expectEqualDeep;
@@ -469,6 +593,7 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(Response) == 32);
     try expect(@sizeOf(Error) == 32);
     try expect(@sizeOf(Format) == 8);
+    try expect(@sizeOf(ChangePropertyRequest) == 6*4);
 }
 
 test "pad4 works as expected" {
@@ -480,3 +605,4 @@ test "pad4 works as expected" {
     try expect(pad4(4) == 4);
     try expect(pad4(5) == 8);
 }
+
