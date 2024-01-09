@@ -22,4 +22,14 @@ pub fn main() !void {
     std.time.sleep(1_000_000_000);
     try rx11.pollEvents(conn);
     std.time.sleep(1_000_000_000);
+
+    try rx11.unmapWindow(conn, window_id);
+    std.time.sleep(1_000_000_000);
+    try rx11.mapWindow(conn, window_id);
+    std.time.sleep(1_000_000_000);
+    try rx11.unmapWindow(conn, window_id);
+    try rx11.destroyWindow(conn, window_id);
+
+    std.time.sleep(1_000_000_000);
+    try rx11.pollEvents(conn);
 }

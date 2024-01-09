@@ -16,8 +16,8 @@ pub const Err = error{
 };
 
 pub fn createWindow(conn: Connection, window_id: u32) !void {
-    try conn.writeStruct(CreateWindowRequest{ 
-        .wid = window_id, 
+    try conn.writeStruct(CreateWindowRequest{
+        .wid = window_id,
         .parent = conn.first_screen_id,
     });
 }
@@ -26,12 +26,20 @@ pub fn mapWindow(conn: Connection, window_id: u32) !void {
     try conn.writeStruct(MapWindowRequest{ .window = window_id });
 }
 
+pub fn unmapWindow(conn: Connection, window_id: u32) !void {
+    try conn.writeStruct(UnmapWindowRequest{ .window = window_id });
+}
+
+pub fn destroyWindow(conn: Connection, window_id: u32) !void {
+    try conn.writeStruct(DestroyWindowRequest{ .window = window_id });
+}
+
 pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
     const n = title.len;
     const p = pad4of(n);
     const request_len = 6 + (n + p) / 4;
     const pad_bytes: [4]u8 = undefined;
-    try conn.writeStruct(ChangePropertyRequest{ 
+    try conn.writeStruct(ChangePropertyRequest{
         .window = window_id,
         .request_len = @intCast(request_len),
         .property = WM_NAME,
@@ -61,6 +69,20 @@ pub fn pollEvents(conn: Connection) !void {
     }
 }
 
+pub const DestroyWindowRequest = extern struct {
+    opcode: u8 = 8,
+    unused: u8 = undefined,
+    request_len: u16 = 2,
+    window: u32,
+};
+
+pub const UnmapWindowRequest = extern struct {
+    opcode: u8 = 10,
+    unused: u8 = undefined,
+    request_len: u16 = 2,
+    window: u32,
+};
+
 pub const ChangePropertyRequest = extern struct {
     /// ChangeProperty
     ///  1     18                              opcode
@@ -81,7 +103,7 @@ pub const ChangePropertyRequest = extern struct {
     ///  1     CARD8                           format = 8 or 16 or 32
     format: u8 = 8,
     ///  3                                     unused
-    unused: [3]u8 = undefined, 
+    unused: [3]u8 = undefined,
     ///  4     CARD32                          length of data in format units
     ///                 (= n for format = 8)
     ///                 (= n/2 for format = 16)
@@ -117,7 +139,7 @@ pub const Error = extern struct {
 
 pub const Connection = struct {
     stream: std.net.Stream,
-    id_generator: IdGenerator = IdGenerator {},
+    id_generator: IdGenerator = IdGenerator{},
     first_screen_id: u32,
 
     pub fn init() !Connection {
@@ -172,7 +194,7 @@ pub const Connection = struct {
         const vendor_name = buf[0..additional.vendor_length];
 
         const formats_offset = pad4(vendor_name.len);
-        const formats_len = 8*additional.number_of_FORMATs_in_pixmap_formats;
+        const formats_len = 8 * additional.number_of_FORMATs_in_pixmap_formats;
         const formats_buf = buf[formats_offset..formats_len];
         var formats: []Format = undefined;
         formats.ptr = @ptrCast(formats_buf.ptr);
@@ -184,7 +206,6 @@ pub const Connection = struct {
         const screen: *Screen = @alignCast(@ptrCast(screens_buf.ptr));
 
         self.first_screen_id = screen.root;
-
 
         // std.debug.print(" {} \n", .{ additional });
         // std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
@@ -358,8 +379,6 @@ const SuccessfulConnectionHeaderAdditional = extern struct {
     ///  4                                     unused
     unused: u32,
 };
-
-
 
 /// https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#Connection_Setup
 const ConnectionSetupRequest = extern struct {
@@ -566,7 +585,6 @@ const CAP_HEIGHT = 66;
 const WM_CLASS = 67;
 const WM_TRANSIENT_FOR = 68;
 
-
 test "parse display" {
     const parse = parseDisplay;
     const eq = std.testing.expectEqualDeep;
@@ -593,7 +611,7 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(Response) == 32);
     try expect(@sizeOf(Error) == 32);
     try expect(@sizeOf(Format) == 8);
-    try expect(@sizeOf(ChangePropertyRequest) == 6*4);
+    try expect(@sizeOf(ChangePropertyRequest) == 6 * 4);
 }
 
 test "pad4 works as expected" {
@@ -605,4 +623,3 @@ test "pad4 works as expected" {
     try expect(pad4(4) == 4);
     try expect(pad4(5) == 8);
 }
-
