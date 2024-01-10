@@ -42,8 +42,8 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
     try conn.writeStruct(ChangePropertyRequest{
         .window = window_id,
         .request_len = @intCast(request_len),
-        .property = WM_NAME,
-        .property_type = STRING,
+        .property = PredefinedAtoms.WM_NAME,
+        .property_type = PredefinedAtoms.STRING,
         .format = 8,
         .data_len = @intCast(title.len),
     });
@@ -51,22 +51,38 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
     try conn.writeBytes(pad_bytes[0..p]);
 }
 
-pub fn pollEvents(conn: Connection) !void {
-    var r: Response = undefined;
-    while (try conn.poll()) {
-        try conn.read(&r);
-        if (r.opcode == 0) {
-            // is error
-            const e: *Error = @ptrCast(&r);
-            std.debug.print("{}\n", .{e});
-        } else if (r.opcode == 1) {
-            // is reply
-            std.debug.print("unhandled reply\n", .{});
-        } else {
-            // is event
-            std.debug.print("unhandled event\n", .{});
-        }
+/// Reads the next input from window system into the buffer which can be one of the following:
+/// - an reply to a request, use `isReply()` function on the buffer to read it
+/// - a request error, use `isError()` on the buffer to read it
+/// - an input event (keyboard/mouse) use `isEvent()` to read it
+/// 
+/// The following errors are possible:
+/// 
+/// - you may get stream/protocol error in which case the connection should be closed
+/// and you should save data and exit gracefully
+/// - you may get a buffer too small error: you can choose to ignore this 
+/// error or to save data and exit gracefully
+pub fn readInput(conn: Connection, buffer: []u8) !void {
+    var r: *Response = @alignCast(@ptrCast(buffer));
+    try conn.read(r);
+    if (r.opcode == 0) {
+        // is error
+        const e: *Error = @ptrCast(&r);
+        // TODO read rest of reply
+        std.debug.print("{}\n", .{e});
+    } else if (r.opcode == 1) {
+        // is reply
+        std.debug.print("unhandled reply\n", .{});
+    } else {
+        // is event
+        std.debug.print("unhandled event\n", .{});
     }
+}
+
+/// returns true if connection has input that needs to be handled
+/// in case of an error the connection should be closed and you should exit and save data
+pub fn hasInput(conn: Connection) !bool {
+    return conn.poll();
 }
 
 pub const DestroyWindowRequest = extern struct {
@@ -86,7 +102,7 @@ pub const UnmapWindowRequest = extern struct {
 pub const ChangePropertyRequest = extern struct {
     /// ChangeProperty
     ///  1     18                              opcode
-    opcode: u8 = 18,
+    opcode: u8 = Opcodes.ChangeProperty,
     ///  1                                     mode
     ///       0     Replace
     ///       1     Prepend
@@ -153,6 +169,9 @@ pub const Connection = struct {
         return self;
     }
 
+    /// destroyes the connection, all windows and resources are automatically
+    /// destroyed when this happens, so no need to waste time on manually closing
+    /// everything
     pub fn deinit(self: Connection) void {
         destroyDisplayServerStream(self.stream);
     }
@@ -400,7 +419,7 @@ const ConnectionSetupRequest = extern struct {
 };
 
 const CreateWindowRequest = extern struct {
-    opcode: u8 = 1,
+    opcode: u8 = Opcodes.CreateWindow,
     depth: u8 = 24,
     /// 8 + n
     request_length: u16 = 8,
@@ -516,74 +535,85 @@ fn streql(a: []const u8, b: []const u8) bool {
     return true;
 }
 
-const PRIMARY = 1;
-const SECONDARY = 2;
-const ARC = 3;
-const ATOM = 4;
-const BITMAP = 5;
-const CARDINAL = 6;
-const COLORMAP = 7;
-const CURSOR = 8;
-const CUT_BUFFER0 = 9;
-const CUT_BUFFER1 = 10;
-const CUT_BUFFER2 = 11;
-const CUT_BUFFER3 = 12;
-const CUT_BUFFER4 = 13;
-const CUT_BUFFER5 = 14;
-const CUT_BUFFER6 = 15;
-const CUT_BUFFER7 = 16;
-const DRAWABLE = 17;
-const FONT = 18;
-const INTEGER = 19;
-const PIXMAP = 20;
-const POINT = 21;
-const RECTANGLE = 22;
-const RESOURCE_MANAGER = 23;
-const RGB_COLOR_MAP = 24;
-const RGB_BEST_MAP = 25;
-const RGB_BLUE_MAP = 26;
-const RGB_DEFAULT_MAP = 27;
-const RGB_GRAY_MAP = 28;
-const RGB_GREEN_MAP = 29;
-const RGB_RED_MAP = 30;
-const STRING = 31;
-const VISUALID = 32;
-const WINDOW = 33;
-const WM_COMMAND = 34;
-const WM_HINTS = 35;
-const WM_CLIENT_MACHINE = 36;
-const WM_ICON_NAME = 37;
-const WM_ICON_SIZE = 38;
-const WM_NAME = 39;
-const WM_NORMAL_HINTS = 40;
-const WM_SIZE_HINTS = 41;
-const WM_ZOOM_HINTS = 42;
-const MIN_SPACE = 43;
-const NORM_SPACE = 44;
-const MAX_SPACE = 45;
-const END_SPACE = 46;
-const SUPERSCRIPT_X = 47;
-const SUPERSCRIPT_Y = 48;
-const SUBSCRIPT_X = 49;
-const SUBSCRIPT_Y = 50;
-const UNDERLINE_POSITION = 51;
-const UNDERLINE_THICKNESS = 52;
-const STRIKEOUT_ASCENT = 53;
-const STRIKEOUT_DESCENT = 54;
-const ITALIC_ANGLE = 55;
-const X_HEIGHT = 56;
-const QUAD_WIDTH = 57;
-const WEIGHT = 58;
-const POINT_SIZE = 59;
-const RESOLUTION = 60;
-const COPYRIGHT = 61;
-const NOTICE = 62;
-const FONT_NAME = 63;
-const FAMILY_NAME = 64;
-const FULL_NAME = 65;
-const CAP_HEIGHT = 66;
-const WM_CLASS = 67;
-const WM_TRANSIENT_FOR = 68;
+const Opcodes = struct {
+    const CreateWindow = 1;
+    const DestroyWindow = 4;
+    const MapWindow = 8;
+    const UnmapWindow = 10;
+    const ChangeProperty = 18;
+    const NoOperation = 127;
+};
+
+const PredefinedAtoms = struct {
+    const PRIMARY = 1;
+    const SECONDARY = 2;
+    const ARC = 3;
+    const ATOM = 4;
+    const BITMAP = 5;
+    const CARDINAL = 6;
+    const COLORMAP = 7;
+    const CURSOR = 8;
+    const CUT_BUFFER0 = 9;
+    const CUT_BUFFER1 = 10;
+    const CUT_BUFFER2 = 11;
+    const CUT_BUFFER3 = 12;
+    const CUT_BUFFER4 = 13;
+    const CUT_BUFFER5 = 14;
+    const CUT_BUFFER6 = 15;
+    const CUT_BUFFER7 = 16;
+    const DRAWABLE = 17;
+    const FONT = 18;
+    const INTEGER = 19;
+    const PIXMAP = 20;
+    const POINT = 21;
+    const RECTANGLE = 22;
+    const RESOURCE_MANAGER = 23;
+    const RGB_COLOR_MAP = 24;
+    const RGB_BEST_MAP = 25;
+    const RGB_BLUE_MAP = 26;
+    const RGB_DEFAULT_MAP = 27;
+    const RGB_GRAY_MAP = 28;
+    const RGB_GREEN_MAP = 29;
+    const RGB_RED_MAP = 30;
+    const STRING = 31;
+    const VISUALID = 32;
+    const WINDOW = 33;
+    const WM_COMMAND = 34;
+    const WM_HINTS = 35;
+    const WM_CLIENT_MACHINE = 36;
+    const WM_ICON_NAME = 37;
+    const WM_ICON_SIZE = 38;
+    const WM_NAME = 39;
+    const WM_NORMAL_HINTS = 40;
+    const WM_SIZE_HINTS = 41;
+    const WM_ZOOM_HINTS = 42;
+    const MIN_SPACE = 43;
+    const NORM_SPACE = 44;
+    const MAX_SPACE = 45;
+    const END_SPACE = 46;
+    const SUPERSCRIPT_X = 47;
+    const SUPERSCRIPT_Y = 48;
+    const SUBSCRIPT_X = 49;
+    const SUBSCRIPT_Y = 50;
+    const UNDERLINE_POSITION = 51;
+    const UNDERLINE_THICKNESS = 52;
+    const STRIKEOUT_ASCENT = 53;
+    const STRIKEOUT_DESCENT = 54;
+    const ITALIC_ANGLE = 55;
+    const X_HEIGHT = 56;
+    const QUAD_WIDTH = 57;
+    const WEIGHT = 58;
+    const POINT_SIZE = 59;
+    const RESOLUTION = 60;
+    const COPYRIGHT = 61;
+    const NOTICE = 62;
+    const FONT_NAME = 63;
+    const FAMILY_NAME = 64;
+    const FULL_NAME = 65;
+    const CAP_HEIGHT = 66;
+    const WM_CLASS = 67;
+    const WM_TRANSIENT_FOR = 68;
+};
 
 test "parse display" {
     const parse = parseDisplay;

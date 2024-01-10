@@ -4,6 +4,8 @@
 const std = @import("std");
 const rx11 = @import("./src/window/adapters/rx11.zig");
 
+var input: [1024]u8 = undefined;
+
 pub fn main() !void {
     var conn = try rx11.Connection.init();
     defer conn.deinit();
@@ -12,24 +14,9 @@ pub fn main() !void {
     try rx11.createWindow(conn, window_id);
     try rx11.mapWindow(conn, window_id);
     try rx11.setName(conn, window_id, "X11 Test Window");
-    try rx11.pollEvents(conn);
     std.time.sleep(1_000_000_000);
-    try rx11.pollEvents(conn);
-    std.time.sleep(1_000_000_000);
-
-    try rx11.setName(conn, window_id, "Other title");
-    try rx11.pollEvents(conn);
-    std.time.sleep(1_000_000_000);
-    try rx11.pollEvents(conn);
-    std.time.sleep(1_000_000_000);
-
-    try rx11.unmapWindow(conn, window_id);
-    std.time.sleep(1_000_000_000);
-    try rx11.mapWindow(conn, window_id);
-    std.time.sleep(1_000_000_000);
-    try rx11.unmapWindow(conn, window_id);
-    try rx11.destroyWindow(conn, window_id);
-
-    std.time.sleep(1_000_000_000);
-    try rx11.pollEvents(conn);
+    while (try rx11.hasInput(conn)) {
+        try rx11.readInput(conn, input[0..64]);
+    }
+   
 }
