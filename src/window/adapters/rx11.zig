@@ -19,7 +19,11 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
     try conn.writeStruct(CreateWindowRequest{
         .wid = window_id,
         .parent = conn.first_screen_id,
+        .bitmask = 0,
     });
+    // const event_mask: u32 = 1;
+    // _ = event_mask; // keydown
+    // try conn.writeBytes(&[4]u8{ 0, 0, 0, 0 });
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -456,6 +460,24 @@ const CreateWindowRequest = extern struct {
     bitmask: u32 = 0,
     // TODO
     // 4n     LISTofVALUE                    value-list
+};
+
+const WindowBitmask = struct {
+    const background_pixmap = 0x00000001;
+    const background_pixel = 0x00000002;
+    const border_pixmap = 0x00000004;
+    const border_pixel = 0x00000008;
+    const bit_gravity = 0x00000010;
+    const win_gravity = 0x00000020;
+    const backing_store = 0x00000040;
+    const backing_planes = 0x00000080;
+    const backing_pixel = 0x00000100;
+    const override_redirect = 0x00000200;
+    const save_under = 0x00000400;
+    const event_mask = 0x00000800;
+    const do_not_propagate_mask = 0x00001000;
+    const colormap = 0x00002000;
+    const cursors  = 0x00004000;
 };
 
 const MapWindowRequest = extern struct {
