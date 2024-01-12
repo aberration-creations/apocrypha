@@ -4,7 +4,7 @@
 const std = @import("std");
 const rx11 = @import("./src/window/adapters/rx11.zig");
 
-var input: [1024]u8 = undefined;
+var input: [1024]u8 align(4) = undefined;
 
 pub fn main() !void {
     var conn = try rx11.Connection.init();
@@ -15,8 +15,10 @@ pub fn main() !void {
     try rx11.mapWindow(conn, window_id);
     try rx11.setName(conn, window_id, "X11 Test Window");
     std.time.sleep(1_000_000_000);
-    while (try rx11.hasInput(conn)) {
-        try rx11.readInput(conn, input[0..64]);
+    while(true) {
+        while (try rx11.hasInput(conn)) {
+            try rx11.readInput(conn, input[0..64]);
+        }
     }
    
 }

@@ -16,14 +16,17 @@ pub const Err = error{
 };
 
 pub fn createWindow(conn: Connection, window_id: u32) !void {
-    try conn.writeStruct(CreateWindowRequest{
+    const n = 1;
+    const request = CreateWindowRequest{
         .wid = window_id,
         .parent = conn.first_screen_id,
-        .bitmask = 0,
-    });
-    // const event_mask: u32 = 1;
-    // _ = event_mask; // keydown
-    // try conn.writeBytes(&[4]u8{ 0, 0, 0, 0 });
+        .request_length = @sizeOf(CreateWindowRequest)/4 + n,
+        .bitmask = WindowBitmask.event_mask,
+    };
+    try conn.writeStruct(request);
+    const event_mask: u32 = 1;
+    try conn.writeStruct(event_mask);
+    std.debug.print("written bytes {} req len {}\n", .{ @sizeOf(CreateWindowRequest) + @sizeOf(u32), request.request_length});
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -66,7 +69,7 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
 /// and you should save data and exit gracefully
 /// - you may get a buffer too small error: you can choose to ignore this 
 /// error or to save data and exit gracefully
-pub fn readInput(conn: Connection, buffer: []u8) !void {
+pub fn readInput(conn: Connection, buffer: [] align(4) u8) !void {
     var r: *Response = @alignCast(@ptrCast(buffer));
     try conn.read(r);
     if (r.opcode == 0) {
@@ -240,6 +243,7 @@ pub const Connection = struct {
         var slice: []const u8 = undefined;
         slice.ptr = @ptrCast(&data);
         slice.len = @sizeOf(@TypeOf(data));
+        // std.debug.print("writing {any}", .{ slice });
         return self.writeBytes(slice);
     }
 
