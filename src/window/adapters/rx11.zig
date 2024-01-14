@@ -10,6 +10,7 @@ pub const Err = error{
     ProtocolNotSupported,
     ProtocolWriteError,
     ProtocolReadError,
+    ProtocolClosed,
     ConnectionSetupFailed,
     ConnectionSetupNeedsAuthenticate,
     ConnectionSetupUnknownReply,
@@ -26,7 +27,6 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
     try conn.writeStruct(request);
     const event_mask: u32 = 1;
     try conn.writeStruct(event_mask);
-    std.debug.print("written bytes {} req len {}\n", .{ @sizeOf(CreateWindowRequest) + @sizeOf(u32), request.request_length});
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -70,16 +70,17 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
 /// - you may get a buffer too small error: you can choose to ignore this 
 /// error or to save data and exit gracefully
 pub fn readInput(conn: Connection, buffer: [] align(4) u8) !void {
-    var r: *Response = @alignCast(@ptrCast(buffer));
+    const r: *Response = @alignCast(@ptrCast(buffer));
     try conn.read(r);
-    if (r.opcode == 0) {
+    if (r.code == 0) {
         // is error
-        const e: *Error = @ptrCast(&r);
-        // TODO read rest of reply
-        std.debug.print("{}\n", .{e});
-    } else if (r.opcode == 1) {
+        const e: *Error = @ptrCast(r);
+        std.debug.print("error {}\n", .{e});
+    } else if (r.code == 1) {
         // is reply
         std.debug.print("unhandled reply\n", .{});
+        // TODO read rest of reply, if we don't then things get bady misaligned
+        return Err.ProtocolReadError;
     } else {
         // is event
         std.debug.print("unhandled event\n", .{});
@@ -91,6 +92,58 @@ pub fn readInput(conn: Connection, buffer: [] align(4) u8) !void {
 pub fn hasInput(conn: Connection) !bool {
     return conn.poll();
 }
+
+/// creates a default gc to be used by graphics operations
+pub fn createDefaultGC(conn: Connection, gcontext: u32, drawable: u32) !void {
+    // https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#requests:CreateGC
+    const request = CreateGCRequest {
+        .gcontext = gcontext,
+        .drawable = drawable,
+    };
+    try conn.writeStruct(request);
+}
+
+const CreateGCRequest = extern struct {
+    opcode: u8 = Opcodes.CreateGC,
+    unused: u8 = undefined,
+    request_len: u16 = 4,
+    gcontext: u32,
+    drawable: u32,
+    bitmask: u32 = 0, 
+};
+
+const PutImageRequest = extern struct {
+    opcode: u8 = Opcodes.PutImage,
+    format: u8 = 2, // ZPixmap
+    /// 2 | 6+(n+p)/4 | request length
+    request_len: u16 = 6,
+    drawable: u32,
+    gcontext: u32,
+    width: u16,
+    height: u16,
+    dst_x: i16,
+    dst_y: i16,
+    /// left_pad must be zero for ZPixmap format
+    left_pad: u8 = 0,
+    depth: u8 = 24,
+    unused: u16 = undefined,
+    // folowed by n LISTofBYTE + padding p
+};
+
+pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, height: u16, dst_x: i16, dst_y: i16, data: []const u32) !void {
+    const request = PutImageRequest {
+        .drawable = drawable,
+        .gcontext = gcontext,
+        .width = width,
+        .height = height,
+        .dst_x = dst_x,
+        .dst_y = dst_y,
+        .request_len = @intCast(@sizeOf(PutImageRequest)/4 + data.len),
+    };
+    try conn.writeStruct(request);
+    try conn.writeU32(data);
+}
+    
 
 pub const DestroyWindowRequest = extern struct {
     opcode: u8 = 8,
@@ -142,7 +195,7 @@ pub const ChangePropertyRequest = extern struct {
 };
 
 pub const Response = extern struct {
-    opcode: u8,
+    code: u8,
     unknown_1: u8,
     sequence_number: u16,
     unknown_2: u32,
@@ -150,8 +203,8 @@ pub const Response = extern struct {
 };
 
 pub const Error = extern struct {
-    opcode: u8 = 0,
-    code: u8,
+    code: u8 = 0,
+    error_code: u8,
     sequence_number: u16,
     unknown: u32,
     minor_opcode: u16,
@@ -183,7 +236,7 @@ pub const Connection = struct {
         destroyDisplayServerStream(self.stream);
     }
 
-    pub fn generateResourceId(self: Connection) u32 {
+    pub fn generateResourceId(self: *Connection) u32 {
         return self.id_generator.generateId();
     }
 
@@ -252,6 +305,14 @@ pub const Connection = struct {
         if (data.len != written) return Err.ProtocolWriteError;
     }
 
+    fn writeU32(self: Connection, data: []const u32) !void {
+        var bytes: []const u8 = undefined;
+        bytes.ptr = @ptrCast(data.ptr);
+        bytes.len = data.len*4;
+        const written = try self.stream.write(bytes);
+        if (data.len * 4 != written) return Err.ProtocolWriteError;
+    }
+
     fn poll(self: Connection) !bool {
         var nfo = [1]std.os.linux.pollfd{std.os.linux.pollfd{
             .fd = self.stream.handle,
@@ -266,7 +327,10 @@ pub const Connection = struct {
         slice.ptr = @ptrCast(buffer);
         slice.len = @sizeOf(@TypeOf(buffer.*));
         const bytes_read = try self.stream.read(slice);
-        if (slice.len != bytes_read) return Err.ProtocolReadError;
+        if (slice.len != bytes_read) {
+            if (bytes_read == 0) return Err.ProtocolClosed;
+            return Err.ProtocolReadError;
+        }
     }
 };
 
@@ -327,12 +391,17 @@ fn pad4of(size: usize) u8 {
 const IdGenerator = struct {
     mask: u32 = 0,
     base: u32 = 0,
+    id: u32 = 0,
 
-    fn generateId(self: IdGenerator) u32 {
-        // TODO generate more than 1 id
-        var id: u32 = 1;
-        id &= self.mask;
-        id |= self.base;
+    fn generateId(self: *IdGenerator) u32 {
+        var id = self.id;
+        while (id == self.id) {
+            id += 1;
+            id &= self.mask;
+            id |= self.base;
+        }
+        self.id = id;
+        std.debug.print("generated id {}\n", .{ id });
         return id;
     }
 };
@@ -567,6 +636,8 @@ const Opcodes = struct {
     const MapWindow = 8;
     const UnmapWindow = 10;
     const ChangeProperty = 18;
+    const CreateGC = 55;
+    const PutImage = 88;
     const NoOperation = 127;
 };
 
@@ -668,6 +739,8 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(Error) == 32);
     try expect(@sizeOf(Format) == 8);
     try expect(@sizeOf(ChangePropertyRequest) == 6 * 4);
+    try expect(@sizeOf(PutImageRequest) == 6 * 4);
+    try expect(@sizeOf(CreateGCRequest) == 4 * 4);
 }
 
 test "pad4 works as expected" {

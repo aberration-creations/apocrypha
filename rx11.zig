@@ -1,6 +1,3 @@
-// zig run rx11.zig
-// attempt at communicating directly with x11 server
-
 const std = @import("std");
 const rx11 = @import("./src/window/adapters/rx11.zig");
 
@@ -10,15 +7,19 @@ pub fn main() !void {
     var conn = try rx11.Connection.init();
     defer conn.deinit();
 
-    const window_id = conn.generateResourceId();
-    try rx11.createWindow(conn, window_id);
-    try rx11.mapWindow(conn, window_id);
-    try rx11.setName(conn, window_id, "X11 Test Window");
-    std.time.sleep(1_000_000_000);
+    const win = conn.generateResourceId();
+    const gc = conn.generateResourceId();
+    try rx11.createWindow(conn, win);
+    try rx11.createDefaultGC(conn, gc, win);
+    try rx11.mapWindow(conn, win);
+    try rx11.setName(conn, win, "X11 Test Window");
+    
+    try rx11.putImage(conn, win, gc, 2, 2, 4, 16, &[4]u32 { 0xffffff,0,0xffffff,0 });
+
     while(true) {
         while (try rx11.hasInput(conn)) {
             try rx11.readInput(conn, input[0..64]);
-        }
+        } 
     }
    
 }
