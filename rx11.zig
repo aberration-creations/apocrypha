@@ -9,12 +9,14 @@ pub fn main() !void {
 
     const win = conn.generateResourceId();
     const gc = conn.generateResourceId();
+    const pixmap = conn.generateResourceId();
     try rx11.createWindow(conn, win);
     try rx11.createDefaultGC(conn, gc, win);
     try rx11.mapWindow(conn, win);
     try rx11.setName(conn, win, "X11 Test Window");
+    try rx11.createPixmap(conn, pixmap, win, 640, 480);
     
-    try rx11.putImage(conn, win, gc, 2, 2, 4, 16, &[4]u32 { 0xffffff,0,0xffffff,0 });
+    try rx11.putImage(conn, pixmap, gc, 2, 2, 4, 16, &[4]u32 { 0xffffff,0,0xffffff,0 });
 
     while(true) {
         while (try rx11.hasInput(conn)) {

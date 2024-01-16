@@ -23,6 +23,7 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
         .parent = conn.first_screen_id,
         .request_length = @sizeOf(CreateWindowRequest)/4 + n,
         .bitmask = WindowBitmask.event_mask,
+        .visual = conn.first_screen.root_visual,
     };
     try conn.writeStruct(request);
     const event_mask: u32 = 1;
@@ -102,6 +103,54 @@ pub fn createDefaultGC(conn: Connection, gcontext: u32, drawable: u32) !void {
     };
     try conn.writeStruct(request);
 }
+
+pub fn createPixmap(conn: Connection, pixmap_id: u32, drawable: u32, width: u16, height: u16) !void {
+    // https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#requests:CreatePixmap
+    const request = CreatePixmapRequest {
+        .depth = 24,
+        .pixmap_id = pixmap_id,
+        .drawable = drawable,
+        .width = width,
+        .height = height,
+    };
+    try conn.writeStruct(request);
+}
+
+pub fn freePixmap(conn: Connection, pixmap_id: u32) !void {
+    conn.writeStruct(FreePixmapRequest { 
+        .pixmap_id = pixmap_id,
+    });
+}
+
+const FreePixmapRequest = extern struct {
+    /// FreePixmap
+    ///  1     54                              opcode
+    opcode: u8 = Opcodes.FreePixmap,
+    ///  1                                     unused
+    unused: u8 = undefined,
+    ///  2     2                               request length
+    request_len: u16 = 2,
+    ///  4     PIXMAP                          pixmap
+    pixmap_id: u32,
+};
+
+const CreatePixmapRequest = extern struct {
+    /// CreatePixmap
+    ///  1     53                              opcode
+    opcode: u8 = Opcodes.CreatePixmap,
+    ///  1     CARD8                           depth
+    depth: u8,
+    ///  2     4                               request length
+    request_len: u16 = 4,
+    ///  4     PIXMAP                          pid
+    pixmap_id: u32,
+    ///  4     DRAWABLE                        drawable
+    drawable: u32,
+    ///  2     CARD16                          width
+    width: u16,
+    ///  2     CARD16                          height
+    height: u16,
+};
 
 const CreateGCRequest = extern struct {
     opcode: u8 = Opcodes.CreateGC,
@@ -204,7 +253,7 @@ pub const Response = extern struct {
 
 pub const Error = extern struct {
     code: u8 = 0,
-    error_code: u8,
+    error_code: ErrorCode,
     sequence_number: u16,
     unknown: u32,
     minor_opcode: u16,
@@ -217,10 +266,12 @@ pub const Connection = struct {
     stream: std.net.Stream,
     id_generator: IdGenerator = IdGenerator{},
     first_screen_id: u32,
+    first_screen: Screen,
 
     pub fn init() !Connection {
         const server = try getDisplayServerInfo();
-        var self = Connection{
+        var self = Connection {
+            .first_screen = undefined,
             .first_screen_id = 0,
             .stream = try createDisplayServerStream(server),
         };
@@ -285,6 +336,7 @@ pub const Connection = struct {
         const screen: *Screen = @alignCast(@ptrCast(screens_buf.ptr));
 
         self.first_screen_id = screen.root;
+        self.first_screen = screen.*;
 
         // std.debug.print(" {} \n", .{ additional });
         // std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
@@ -636,6 +688,8 @@ const Opcodes = struct {
     const MapWindow = 8;
     const UnmapWindow = 10;
     const ChangeProperty = 18;
+    const CreatePixmap = 53;
+    const FreePixmap = 54;
     const CreateGC = 55;
     const PutImage = 88;
     const NoOperation = 127;
@@ -712,6 +766,26 @@ const PredefinedAtoms = struct {
     const WM_TRANSIENT_FOR = 68;
 };
 
+const ErrorCode = enum(u8) {
+    Request = 1,
+    Value = 2,
+    Window = 3,
+    Pixmap = 4,
+    Atom = 5,
+    Cursor = 6,
+    Font = 7,
+    Match = 8,
+    Drawable = 9,
+    Access = 10,
+    Alloc = 11,
+    Colormap = 12,
+    GContext = 13,
+    IDChoice = 14,
+    Name = 15,
+    Length = 16,
+    Implementation = 17,
+};
+
 test "parse display" {
     const parse = parseDisplay;
     const eq = std.testing.expectEqualDeep;
@@ -741,6 +815,7 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(ChangePropertyRequest) == 6 * 4);
     try expect(@sizeOf(PutImageRequest) == 6 * 4);
     try expect(@sizeOf(CreateGCRequest) == 4 * 4);
+    try expect(@sizeOf(CreatePixmapRequest) == 4 * 4);
 }
 
 test "pad4 works as expected" {
