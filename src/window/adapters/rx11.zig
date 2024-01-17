@@ -21,7 +21,7 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
     const request = CreateWindowRequest{
         .wid = window_id,
         .parent = conn.first_screen_id,
-        .request_length = @sizeOf(CreateWindowRequest)/4 + n,
+        .request_length = @sizeOf(CreateWindowRequest) / 4 + n,
         .bitmask = WindowBitmask.event_mask,
         .visual = conn.first_screen.root_visual,
     };
@@ -63,14 +63,14 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
 /// - an reply to a request, use `isReply()` function on the buffer to read it
 /// - a request error, use `isError()` on the buffer to read it
 /// - an input event (keyboard/mouse) use `isEvent()` to read it
-/// 
+///
 /// The following errors are possible:
-/// 
+///
 /// - you may get stream/protocol error in which case the connection should be closed
 /// and you should save data and exit gracefully
-/// - you may get a buffer too small error: you can choose to ignore this 
+/// - you may get a buffer too small error: you can choose to ignore this
 /// error or to save data and exit gracefully
-pub fn readInput(conn: Connection, buffer: [] align(4) u8) !void {
+pub fn readInput(conn: Connection, buffer: []align(4) u8) !void {
     const r: *Response = @alignCast(@ptrCast(buffer));
     try conn.read(r);
     if (r.code == 0) {
@@ -97,16 +97,29 @@ pub fn hasInput(conn: Connection) !bool {
 /// creates a default gc to be used by graphics operations
 pub fn createDefaultGC(conn: Connection, gcontext: u32, drawable: u32) !void {
     // https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#requests:CreateGC
-    const request = CreateGCRequest {
+    const request = CreateGCRequest{
         .gcontext = gcontext,
         .drawable = drawable,
     };
     try conn.writeStruct(request);
 }
 
+pub fn createGC(conn: Connection, gcontext: u32, drawable: u32, bitmask: u32, values: []const u32) !void {
+    if (@popCount(bitmask) != values.len) {
+        @panic("bitmask values mismatch");
+    }
+    try conn.writeStruct(CreateGCRequest {
+        .gcontext = gcontext,
+        .drawable = drawable,
+        .bitmask = bitmask,
+        .request_len = 4 + @as(u16, @intCast(values.len)),
+    });
+    try conn.writeU32(values);
+}
+
 pub fn createPixmap(conn: Connection, pixmap_id: u32, drawable: u32, width: u16, height: u16) !void {
     // https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#requests:CreatePixmap
-    const request = CreatePixmapRequest {
+    const request = CreatePixmapRequest{
         .depth = 24,
         .pixmap_id = pixmap_id,
         .drawable = drawable,
@@ -117,10 +130,48 @@ pub fn createPixmap(conn: Connection, pixmap_id: u32, drawable: u32, width: u16,
 }
 
 pub fn freePixmap(conn: Connection, pixmap_id: u32) !void {
-    conn.writeStruct(FreePixmapRequest { 
+    conn.writeStruct(FreePixmapRequest{
         .pixmap_id = pixmap_id,
     });
 }
+
+pub fn polyFillRectangle(conn: Connection, drawable: u32, gcontext: u32, x: i16, y: i16, width: u16, height: u16) !void {
+    const n = 1; // list of 1 rectangles
+    try conn.writeStruct(PolyFillRectangleRequest{
+        .request_len = 3 + 2 * n,
+        .drawable = drawable,
+        .gcontext = gcontext,
+    });
+    try conn.writeStruct(Rectangle{
+        .x = x,
+        .y = y,
+        .width = width,
+        .height = height,
+    });
+}
+
+pub const Rectangle = extern struct {
+    x: i16,
+    y: i16,
+    width: u16,
+    height: u16,
+};
+
+const PolyFillRectangleRequest = extern struct {
+    /// PolyFillRectangle
+    ///      1     70                              opcode
+    opcode: u8 = Opcodes.PolyFillRectangle,
+    ///      1                                     unused
+    unused: u8 = undefined,
+    ///      2     3+2n                            request length
+    request_len: u16 = 3,
+    ///      4     DRAWABLE                        drawable
+    drawable: u32,
+    ///      4     GCONTEXT                        gc
+    gcontext: u32,
+    // followed by
+    //      8n     LISTofRECTANGLE                rectangles
+};
 
 const FreePixmapRequest = extern struct {
     /// FreePixmap
@@ -152,13 +203,40 @@ const CreatePixmapRequest = extern struct {
     height: u16,
 };
 
+pub const GCBitmaskValues = struct {
+    pub const function = 0x00000001;
+    pub const plane_mask = 0x00000002;
+    pub const foreground = 0x00000004;
+    pub const background = 0x00000008;
+    pub const line_width = 0x00000010;
+    pub const line_style = 0x00000020;
+    pub const cap_style = 0x00000040;
+    pub const join_style = 0x00000080;
+    pub const fill_style = 0x00000100;
+    pub const fill_rule = 0x00000200;
+    pub const tile = 0x00000400;
+    pub const stipple = 0x00000800;
+    pub const tile_stipple_x_origin = 0x00001000;
+    pub const tile_stipple_y_origin = 0x00002000;
+    pub const font = 0x00004000;
+    pub const subwindow_mode = 0x00008000;
+    pub const graphics_exposures = 0x00010000;
+    pub const clip_x_origin = 0x00020000;
+    pub const clip_y_origin = 0x00040000;
+    pub const clip_mask = 0x00080000;
+    pub const dash_offset = 0x00100000;
+    pub const dashes = 0x00200000;
+};
+
 const CreateGCRequest = extern struct {
     opcode: u8 = Opcodes.CreateGC,
     unused: u8 = undefined,
+    /// 4+n request length (n is nr of bits in bitmask)
     request_len: u16 = 4,
     gcontext: u32,
     drawable: u32,
-    bitmask: u32 = 0, 
+    bitmask: u32 = 0,
+
 };
 
 const PutImageRequest = extern struct {
@@ -180,19 +258,18 @@ const PutImageRequest = extern struct {
 };
 
 pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, height: u16, dst_x: i16, dst_y: i16, data: []const u32) !void {
-    const request = PutImageRequest {
+    const request = PutImageRequest{
         .drawable = drawable,
         .gcontext = gcontext,
         .width = width,
         .height = height,
         .dst_x = dst_x,
         .dst_y = dst_y,
-        .request_len = @intCast(@sizeOf(PutImageRequest)/4 + data.len),
+        .request_len = @intCast(@sizeOf(PutImageRequest) / 4 + data.len),
     };
     try conn.writeStruct(request);
     try conn.writeU32(data);
 }
-    
 
 pub const DestroyWindowRequest = extern struct {
     opcode: u8 = 8,
@@ -270,7 +347,7 @@ pub const Connection = struct {
 
     pub fn init() !Connection {
         const server = try getDisplayServerInfo();
-        var self = Connection {
+        var self = Connection{
             .first_screen = undefined,
             .first_screen_id = 0,
             .stream = try createDisplayServerStream(server),
@@ -360,7 +437,7 @@ pub const Connection = struct {
     fn writeU32(self: Connection, data: []const u32) !void {
         var bytes: []const u8 = undefined;
         bytes.ptr = @ptrCast(data.ptr);
-        bytes.len = data.len*4;
+        bytes.len = data.len * 4;
         const written = try self.stream.write(bytes);
         if (data.len * 4 != written) return Err.ProtocolWriteError;
     }
@@ -453,7 +530,7 @@ const IdGenerator = struct {
             id |= self.base;
         }
         self.id = id;
-        std.debug.print("generated id {}\n", .{ id });
+        std.debug.print("generated id {}\n", .{id});
         return id;
     }
 };
@@ -602,7 +679,7 @@ const WindowBitmask = struct {
     const event_mask = 0x00000800;
     const do_not_propagate_mask = 0x00001000;
     const colormap = 0x00002000;
-    const cursors  = 0x00004000;
+    const cursors = 0x00004000;
 };
 
 const MapWindowRequest = extern struct {
@@ -691,6 +768,7 @@ const Opcodes = struct {
     const CreatePixmap = 53;
     const FreePixmap = 54;
     const CreateGC = 55;
+    const PolyFillRectangle = 70;
     const PutImage = 88;
     const NoOperation = 127;
 };
