@@ -26,7 +26,7 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
         .visual = conn.first_screen.root_visual,
     };
     try conn.writeStruct(request);
-    const event_mask: u32 = 1;
+    const event_mask: u32 = EventMask.Exposure;
     try conn.writeStruct(event_mask);
 }
 
@@ -117,6 +117,12 @@ pub fn createGC(conn: Connection, gcontext: u32, drawable: u32, bitmask: u32, va
     try conn.writeU32(values);
 }
 
+pub fn freeGC(conn: Connection, gcontext: u32) !void {
+    return conn.writeStruct(FreeGCRequest { 
+        .gcontext = gcontext,
+    });
+}
+
 pub fn createPixmap(conn: Connection, pixmap_id: u32, drawable: u32, width: u16, height: u16) !void {
     // https://x.org/releases/X11R7.7/doc/xproto/x11protocol.html#requests:CreatePixmap
     const request = CreatePixmapRequest{
@@ -155,6 +161,18 @@ pub const Rectangle = extern struct {
     y: i16,
     width: u16,
     height: u16,
+};
+
+const FreeGCRequest = extern struct {
+    // FreeGC
+    //      1     60                              opcode
+    opcode: u8 = Opcodes.FreeGC,
+    //      1                                     unused
+    unused: u8 = undefined,
+    //      2     2                               request length
+    request_len: u16 = 2,
+    //      4     GCONTEXT                        gc
+    gcontext: u32,
 };
 
 const PolyFillRectangleRequest = extern struct {
@@ -639,7 +657,7 @@ const CreateWindowRequest = extern struct {
     ///           0     CopyFromParent
     ///           1     InputOutput
     ///           2     InputOnly
-    class: u16 = 0,
+    class: u16 = 1,
     /// 4     VISUALID                        visual
     ///      0     CopyFromParent
     visual: u32 = 0,
@@ -680,6 +698,35 @@ const WindowBitmask = struct {
     const do_not_propagate_mask = 0x00001000;
     const colormap = 0x00002000;
     const cursors = 0x00004000;
+};
+
+const EventMask = struct {
+     const KeyPress = 0x00000001;
+     const KeyRelease = 0x00000002;
+     const ButtonPress = 0x00000004;
+     const ButtonRelease = 0x00000008;
+     const EnterWindow = 0x00000010;
+     const LeaveWindow = 0x00000020;
+     const PointerMotion = 0x00000040;
+     const PointerMotionHint = 0x00000080;
+     const Button1Motion = 0x00000100;
+     const Button2Motion = 0x00000200;
+     const Button3Motion = 0x00000400;
+     const Button4Motion = 0x00000800;
+     const Button5Motion = 0x00001000;
+     const ButtonMotion = 0x00002000;
+     const KeymapState = 0x00004000;
+     const Exposure = 0x00008000;
+     const VisibilityChange = 0x00010000;
+     const StructureNotify = 0x00020000;
+     const ResizeRedirect = 0x00040000;
+     const SubstructureNotify = 0x00080000;
+     const SubstructureRedirect = 0x00100000;
+     const FocusChange = 0x00200000;
+     const PropertyChange = 0x00400000;
+     const ColormapChange = 0x00800000;
+     const OwnerGrabButton = 0x01000000;
+     const unused_but_must_be_zero = 0xFE000000;
 };
 
 const MapWindowRequest = extern struct {
@@ -768,6 +815,7 @@ const Opcodes = struct {
     const CreatePixmap = 53;
     const FreePixmap = 54;
     const CreateGC = 55;
+    const FreeGC = 60;
     const PolyFillRectangle = 70;
     const PutImage = 88;
     const NoOperation = 127;

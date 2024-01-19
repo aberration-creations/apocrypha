@@ -18,16 +18,23 @@ pub fn main() !void {
     try rx11.setName(conn, win, "X11 Test Window");
     try rx11.createPixmap(conn, pixmap, win, 640, 480);
     try rx11.createDefaultGC(conn, pixmapgc, pixmap);
-    try rx11.createGC(conn, foreground, win, rx11.GCBitmaskValues.foreground, &[1]u32{ 0x00800080 });    
+
+    var rand = std.rand.DefaultPrng.init(0);
+
+    // try rx11.createGC(conn, foreground, win, rx11.GCBitmaskValues.foreground, &[1]u32{ 0x00f00080 });    
 
     // try rx11.putImage(conn, pixmap, pixmapgc, 2, 2, 4, 16, &[4]u32 { 0xffffff,0,0xffffff,0 });
+
+        // try rx11.putImage(conn, win, foreground, 0, 0, 4, 16, &[0]u32 {  });
 
     while(true) {
         // while (try rx11.hasInput(conn)) {
         // } 
-            try rx11.readInput(conn, input[0..64]);
-        try rx11.polyFillRectangle(conn, win, foreground, 0, 0, 512, 512);
-        // try rx11.putImage(conn, win, pixmapgc, 2, 2, 4, 16, &[4]u32 { 0xffffff,0,0xffffff,0 });
+        try rx11.readInput(conn, input[0..64]);
+        const color: u32 = @intCast(rand.next() & 0xffffff);
+        try rx11.createGC(conn, foreground, win, rx11.GCBitmaskValues.foreground, &[1]u32{ color });   
+        try rx11.polyFillRectangle(conn, win, foreground, 0, 0, 9999, 9999);
+        try rx11.freeGC(conn, foreground);
     }
    
 }
