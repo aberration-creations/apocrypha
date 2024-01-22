@@ -26,7 +26,7 @@ pub fn createWindow(conn: Connection, window_id: u32) !void {
         .visual = conn.first_screen.root_visual,
     };
     try conn.writeStruct(request);
-    const event_mask: u32 = EventMask.Exposure;
+    const event_mask: u32 = EventMask.KeyPress;
     try conn.writeStruct(event_mask);
 }
 
@@ -84,7 +84,7 @@ pub fn readInput(conn: Connection, buffer: []align(4) u8) !void {
         return Err.ProtocolReadError;
     } else {
         // is event
-        std.debug.print("unhandled event\n", .{});
+        std.debug.print("unhandled event code: {}\n", .{ r.code });
     }
 }
 
