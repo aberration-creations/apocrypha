@@ -32,9 +32,10 @@ pub fn main() !void {
         // } 
         try rx11.readInput(conn, input[0..64]);
         const color: u32 = @intCast(rand.next() & 0xffffff);
-        try rx11.createGC(conn, foreground, win, rx11.GCBitmaskValues.foreground, &[1]u32{ color });   
-        try rx11.polyFillRectangle(conn, win, foreground, 0, 0, 9999, 9999);
+        try rx11.createGC(conn, foreground, pixmap, rx11.GCBitmaskValues.foreground, &[1]u32{ color });   
+        try rx11.polyFillRectangle(conn, pixmap, foreground, 0, 0, 9999, 9999);
         try rx11.freeGC(conn, foreground);
+        try rx11.copyArea(conn, pixmap, win, gc, 0, 0, 0, 0, 640, 480);
     }
    
 }

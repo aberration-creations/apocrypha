@@ -136,8 +136,22 @@ pub fn createPixmap(conn: Connection, pixmap_id: u32, drawable: u32, width: u16,
 }
 
 pub fn freePixmap(conn: Connection, pixmap_id: u32) !void {
-    conn.writeStruct(FreePixmapRequest{
+    return conn.writeStruct(FreePixmapRequest{
         .pixmap_id = pixmap_id,
+    });
+}
+
+pub fn copyArea(conn: Connection, src: u32, dst: u32, gc: u32, src_x: i16, src_y: i16, dst_x: i16, dst_y: i16, width: u16, height: u16) !void {
+    return conn.writeStruct(CopyAreaRequest {
+        .src = src,
+        .dst = dst,
+        .gc = gc,
+        .src_x = src_x,
+        .src_y = src_y,
+        .dst_x = dst_x,
+        .dst_y = dst_y,
+        .width = width,
+        .height = height,
     });
 }
 
@@ -273,6 +287,34 @@ const PutImageRequest = extern struct {
     depth: u8 = 24,
     unused: u16 = undefined,
     // folowed by n LISTofBYTE + padding p
+};
+
+const CopyAreaRequest = extern struct {
+    /// CopyArea
+    ///  1     62                              opcode
+    opcode: u8 = Opcodes.CopyArea,
+    ///  1                                     unused
+    unused: u8 = undefined, 
+    ///  2     7                               request length
+    request_len: u16 = 7,
+    ///  4     DRAWABLE                        src-drawable
+    src: u32,
+    ///  4     DRAWABLE                        dst-drawable
+    dst: u32,
+    ///  4     GCONTEXT                        gc
+    gc: u32,
+    ///  2     INT16                           src-x
+    src_x: i16,
+    ///  2     INT16                           src-y
+    src_y: i16,
+    ///  2     INT16                           dst-x
+    dst_x: i16,
+    ///  2     INT16                           dst-y
+    dst_y: i16,
+    ///  2     CARD16                          width
+    width: u16,
+    ///  2     CARD16                          height
+    height: u16,
 };
 
 pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, height: u16, dst_x: i16, dst_y: i16, data: []const u32) !void {
@@ -816,6 +858,7 @@ const Opcodes = struct {
     const FreePixmap = 54;
     const CreateGC = 55;
     const FreeGC = 60;
+    const CopyArea = 62;
     const PolyFillRectangle = 70;
     const PutImage = 88;
     const NoOperation = 127;
@@ -942,6 +985,7 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(PutImageRequest) == 6 * 4);
     try expect(@sizeOf(CreateGCRequest) == 4 * 4);
     try expect(@sizeOf(CreatePixmapRequest) == 4 * 4);
+    try expect(@sizeOf(CopyAreaRequest) == 7 * 4);
 }
 
 test "pad4 works as expected" {
