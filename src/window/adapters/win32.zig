@@ -34,6 +34,8 @@ extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
 extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
 extern "user32" fn GetSystemMetrics(nIndex: i32) i32;
+extern "user32" fn InvalidateRect(hWnd: win32.HWND, lpRect: ?*win32.RECT, bErase: win32.BOOL) win32.BOOL;
+
 
 extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque {}) HGDIOBJ;
 extern "gdi32" fn CreateCompatibleDC(hdc: HDC) HDC;
@@ -141,6 +143,10 @@ pub const Window = struct {
         }
         _ = user32.DestroyWindow(self.hwnd);
     }
+
+    pub fn invalidateRect(self: Window) void {
+        _ = InvalidateRect(self.hwnd, null, 0);
+    }
 };
 
 fn ensureStaticClassRegistered(hInstance: win32.HINSTANCE) void {
@@ -238,20 +244,29 @@ fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lP
         } }, // TODO extend
         user32.WM_PAINT => EventData{ .paint = undefined },
         user32.WM_CLOSE => EventData{ .closewindow = undefined },
-        user32.WM_MOUSEMOVE => EventData{ .pointermove = common.Position{
-            .x = @intCast(lParam & 0xffff),
-            .y = @intCast((lParam >> 16) & 0xffff),
-        } },
         user32.WM_SIZE => EventData{ .resize = common.Size{
             .width = @intCast(lParam & 0xffff),
             .height = @intCast((lParam >> 16) & 0xffff),
         } },
-        user32.WM_LBUTTONDOWN => EventData{ .unknown = undefined },
+        user32.WM_MOUSEMOVE => EventData{ .pointermove = positionFromLparam(lParam)},
+        user32.WM_LBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        user32.WM_LBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
+        user32.WM_MBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        user32.WM_MBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
+        user32.WM_RBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        user32.WM_RBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
         else => EventData{ .unknown = undefined },
     };
     static_event_queue[static_event_queue_tail] = event;
     static_event_queue_tail = static_event_queue_tail +% 1;
     return user32.DefWindowProcA(hwnd, uMsg, wParam, lParam);
+}
+
+fn positionFromLparam(lparam: isize) common.Position {
+    return common.Position {
+        .x = @intCast(lparam & 0xffff),
+        .y = @intCast((lparam >> 16) & 0xffff),
+    };
 }
 
 const VK_LBUTTON = 0x01; // 	Left mouse button

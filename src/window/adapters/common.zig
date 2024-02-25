@@ -11,6 +11,8 @@ pub const Event = enum {
     keydown,
     resize,
     pointermove,
+    pointerdown,
+    pointerup,
 };
 
 pub const Key = enum {
@@ -29,6 +31,8 @@ pub const EventData = union(Event) {
     keydown: Key,
     resize: Size,
     pointermove: Position,
+    pointerdown: Position,
+    pointerup: Position,
 };
 
 pub const Size = struct {
@@ -48,4 +52,8 @@ pub const WindowCreateOptions = struct {
     height: u16 = 400,
     title: []const u8 = "Window",
     fullscreen: bool = false,
+};
+
+pub const InvalidateRectOptions = struct {
+
 };

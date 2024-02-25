@@ -130,6 +130,14 @@ pub const Window = struct {
         }
     }
 
+    pub fn requestRepaint(self: Self, opt: common.InvalidateRectOptions) void {
+        _ = opt;
+        switch (subsystem) {
+            .windows => win32W[self.handle].invalidateRect(),
+            else => @compileError("not supported"),
+        }
+    }
+
 };
 
 /// waits for the next UI event
