@@ -140,7 +140,7 @@ fn progressiveRendererer(window: ui.Window, canvas: *ui.Canvas32) void {
 
     }
 
-    var now = @divFloor(std.time.milliTimestamp(), 100);
+    const now = @divFloor(std.time.milliTimestamp(), 100);
     if (last_present != now)
     {
         last_present = now;
@@ -195,11 +195,11 @@ fn renderPixel(ix: i32, iy: i32, width: usize, height: usize) u32 {
     var cix = ix; cix -= @intCast(width/2);
     var ciy = iy; ciy -= @intCast(height/2);
     
-    var frag_coord = vec2{ @floatFromInt(ix), @floatFromInt(iy) };
+    const frag_coord = vec2{ @floatFromInt(ix), @floatFromInt(iy) };
     _ = frag_coord;
-    var centerd_coord = vec2{ @floatFromInt(cix), @floatFromInt(ciy) };
-    var size: f32 = @floatFromInt(@min(width, height));
-    var uv = centerd_coord / vec2{ size, size };
+    const centerd_coord = vec2{ @floatFromInt(cix), @floatFromInt(ciy) };
+    const size: f32 = @floatFromInt(@min(width, height));
+    const uv = centerd_coord / vec2{ size, size };
 
     //var color = plasma(uv + vec2{1,1});
     var color = vec3{0,0,0};
@@ -217,9 +217,9 @@ fn renderPixel(ix: i32, iy: i32, width: usize, height: usize) u32 {
     color = @sqrt(color);
     color = @min(vec3{1,1,1}, color);
 
-    var byte_r: u8 = @intFromFloat(color[0] * 0xff);
-    var byte_g: u8 = @intFromFloat(color[1] * 0xff);
-    var byte_b: u8 = @intFromFloat(color[2] * 0xff);
+    const byte_r: u8 = @intFromFloat(color[0] * 0xff);
+    const byte_g: u8 = @intFromFloat(color[1] * 0xff);
+    const byte_b: u8 = @intFromFloat(color[2] * 0xff);
 
     return ui.color32bgra.makeColor32bgra(byte_r, byte_g, byte_b, 255);
 }
@@ -279,8 +279,8 @@ fn raytrace(uv: vec2) vec3 {
 
         if ( intersect.rayScene(ray, &scene)) |hit| {
 
-            var light_distance = length(light_pos - hit.position);
-            var light_dir = normalize(light_pos - hit.position);
+            const light_distance = length(light_pos - hit.position);
+            const light_dir = normalize(light_pos - hit.position);
             var diffuse = dot(hit.normal, light_dir);
             diffuse = @max(0, diffuse);
 
@@ -411,9 +411,9 @@ fn randSphere() vec3 {
 }
 
 fn randF32(min: f32, max: f32) f32 {
-    var value = rand.next();
+    const value = rand.next();
     var f: f32 = @floatFromInt(value);
-    var l: f32 = @floatFromInt(std.math.maxInt(u64));
+    const l: f32 = @floatFromInt(std.math.maxInt(u64));
     f /= l;
     f = f * (max - min) + min;
     return f;
@@ -504,7 +504,7 @@ const intersect = struct {
 
     fn rayPlane(ray: Ray, plane: Plane) ?f32 {
         const epsilon = 1e-6;
-        var denominator: f32 = dot(plane.normal, ray.dir);
+        const denominator: f32 = dot(plane.normal, ray.dir);
         var abs_denom = denominator;
         if (abs_denom < denominator) {
             abs_denom = -denominator;

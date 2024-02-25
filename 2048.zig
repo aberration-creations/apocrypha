@@ -27,7 +27,7 @@ pub fn main() !void {
         const deinit_status = gpa.deinit();
         if (deinit_status == .leak) @panic("MEMORY LEAK");
     }
-
+    
     canvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
     defer canvas.deinit();
 
@@ -71,6 +71,7 @@ pub fn main() !void {
 }
 
 fn move(dir_x: i32, dir_y: i32) !void {
+    std.debug.print("move {} {}", .{ dir_x, dir_y });
     var moved = false;
     var merge_score: usize = 0;
 
@@ -168,6 +169,7 @@ fn moveCell(x: usize, y: usize, dx: i32, dy: i32) struct { moved: bool, score: u
 }
 
 fn render() !void {
+    std.debug.print("render", .{});
     const now = std.time.milliTimestamp();
     var dt: f32 = 0;
     if (is_animating) {

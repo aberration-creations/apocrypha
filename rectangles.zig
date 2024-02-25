@@ -51,15 +51,15 @@ pub fn main() !void {
             else => {},
         };
 
-        var time: u32 = @intCast((std.time.milliTimestamp() >> 4) & 0xffffffff);
+        const time: u32 = @intCast((std.time.milliTimestamp() >> 4) & 0xffffffff);
         var prng = std.rand.DefaultPrng.init(0);
         canvas.clear(black);
         for (0..14) |x| 
         {
             for(0..8) |y|
             {
-                var px: u32 = @intCast(x*128+64);
-                var py: u32 = @intCast(y*128+24);
+                const px: u32 = @intCast(x*128+64);
+                const py: u32 = @intCast(y*128+24);
 
                 var b0 = Box.initCoords(
                     px + @as(u32, (prng.random().int(u32)+%time) % 128), 
@@ -73,10 +73,10 @@ pub fn main() !void {
                     px + @as(u32, prng.random().int(u32) % 128), 
                     py + @as(u32, prng.random().int(u32) % 128));
 
-                var b2 = b0.getIntersectionBox(b1);
+                const b2 = b0.getIntersectionBox(b1);
 
-                var b0c = area1;
-                var b1c = area2;
+                const b0c = area1;
+                const b1c = area2;
                 var b2c = area3;
 
                 if (b0.isInsideBox(b1)) b2c = offWhite;
@@ -89,8 +89,8 @@ pub fn main() !void {
 
                 for (0..256) |_|
                 {
-                    var qx = px + @as(u32, (prng.random().int(u32)-%time) % 128);
-                    var qy = py + @as(u32, (prng.random().int(u32)+%time) % 128);
+                    const qx = px + @as(u32, (prng.random().int(u32)-%time) % 128);
+                    const qy = py + @as(u32, (prng.random().int(u32)+%time) % 128);
                     var qc = pointOutside;
                     if (b0.containsPoint(qx, qy) or b1.containsPoint(qx, qy)) {
                         qc = backgroundColor;

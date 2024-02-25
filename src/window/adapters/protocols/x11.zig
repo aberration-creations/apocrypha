@@ -17,17 +17,27 @@ pub const Err = error{
 };
 
 pub fn createWindow(conn: Connection, window_id: u32) !void {
-    const n = 1;
+    const n = 2;
     const request = CreateWindowRequest{
         .wid = window_id,
         .parent = conn.first_screen_id,
         .request_length = @sizeOf(CreateWindowRequest) / 4 + n,
-        .bitmask = WindowBitmask.event_mask,
+        .bitmask = WindowBitmask.event_mask | WindowBitmask.colormap,
         .visual = conn.first_screen.root_visual,
+        .depth = conn.first_screen.root_depth,
     };
     try conn.writeStruct(request);
-    const event_mask: u32 = EventMask.KeyPress;
+    const event_mask: u32 = EventMask.ButtonPress | EventMask.Exposure 
+        | EventMask.ButtonRelease | EventMask.PointerMotion | EventMask.EnterWindow | EventMask.LeaveWindow
+        | EventMask.KeyPress | EventMask.KeyRelease | EventMask.StructureNotify;
+            //    x.XCB_EVENT_MASK_EXPOSURE | x.XCB_EVENT_MASK_BUTTON_PRESS |
+            //         x.XCB_EVENT_MASK_BUTTON_RELEASE | x.XCB_EVENT_MASK_POINTER_MOTION |
+            //         x.XCB_EVENT_MASK_ENTER_WINDOW | x.XCB_EVENT_MASK_LEAVE_WINDOW |
+            //         x.XCB_EVENT_MASK_KEY_PRESS | x.XCB_EVENT_MASK_KEY_RELEASE |
+            //         x.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
     try conn.writeStruct(event_mask);
+    const colormap: u32 = conn.first_screen.default_colormap;
+    try conn.writeStruct(colormap);
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -70,13 +80,14 @@ pub fn setName(conn: Connection, window_id: u32, title: []const u8) !void {
 /// and you should save data and exit gracefully
 /// - you may get a buffer too small error: you can choose to ignore this
 /// error or to save data and exit gracefully
-pub fn readInput(conn: Connection, buffer: []align(4) u8) !void {
+pub fn readInput(conn: Connection, buffer: []align(4) u8) !*Response {
     const r: *Response = @alignCast(@ptrCast(buffer));
     try conn.read(r);
     if (r.code == 0) {
         // is error
         const e: *Error = @ptrCast(r);
         std.debug.print("error {}\n", .{e});
+        return r;
     } else if (r.code == 1) {
         // is reply
         std.debug.print("unhandled reply\n", .{});
@@ -84,7 +95,7 @@ pub fn readInput(conn: Connection, buffer: []align(4) u8) !void {
         return Err.ProtocolReadError;
     } else {
         // is event
-        std.debug.print("unhandled event code: {}\n", .{ r.code });
+        return r;
     }
 }
 
@@ -108,7 +119,7 @@ pub fn createGC(conn: Connection, gcontext: u32, drawable: u32, bitmask: u32, va
     if (@popCount(bitmask) != values.len) {
         @panic("bitmask values mismatch");
     }
-    try conn.writeStruct(CreateGCRequest {
+    try conn.writeStruct(CreateGCRequest{
         .gcontext = gcontext,
         .drawable = drawable,
         .bitmask = bitmask,
@@ -118,7 +129,7 @@ pub fn createGC(conn: Connection, gcontext: u32, drawable: u32, bitmask: u32, va
 }
 
 pub fn freeGC(conn: Connection, gcontext: u32) !void {
-    return conn.writeStruct(FreeGCRequest { 
+    return conn.writeStruct(FreeGCRequest{
         .gcontext = gcontext,
     });
 }
@@ -142,7 +153,7 @@ pub fn freePixmap(conn: Connection, pixmap_id: u32) !void {
 }
 
 pub fn copyArea(conn: Connection, src: u32, dst: u32, gc: u32, src_x: i16, src_y: i16, dst_x: i16, dst_y: i16, width: u16, height: u16) !void {
-    return conn.writeStruct(CopyAreaRequest {
+    return conn.writeStruct(CopyAreaRequest{
         .src = src,
         .dst = dst,
         .gc = gc,
@@ -268,7 +279,6 @@ const CreateGCRequest = extern struct {
     gcontext: u32,
     drawable: u32,
     bitmask: u32 = 0,
-
 };
 
 const PutImageRequest = extern struct {
@@ -294,7 +304,7 @@ const CopyAreaRequest = extern struct {
     ///  1     62                              opcode
     opcode: u8 = Opcodes.CopyArea,
     ///  1                                     unused
-    unused: u8 = undefined, 
+    unused: u8 = undefined,
     ///  2     7                               request length
     request_len: u16 = 7,
     ///  4     DRAWABLE                        src-drawable
@@ -317,7 +327,7 @@ const CopyAreaRequest = extern struct {
     height: u16,
 };
 
-pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, height: u16, dst_x: i16, dst_y: i16, data: []const u32) !void {
+pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, height: u16, dst_x: i16, dst_y: i16, data: []const u8) !void {
     const request = PutImageRequest{
         .drawable = drawable,
         .gcontext = gcontext,
@@ -325,10 +335,10 @@ pub fn putImage(conn: Connection, drawable: u32, gcontext: u32, width: u16, heig
         .height = height,
         .dst_x = dst_x,
         .dst_y = dst_y,
-        .request_len = @intCast(@sizeOf(PutImageRequest) / 4 + data.len),
+        .request_len = @intCast(@sizeOf(PutImageRequest) / 4 + pad4(data.len) / 4),
     };
     try conn.writeStruct(request);
-    try conn.writeU32(data);
+    try conn.writeU8andPad(data);
 }
 
 pub const DestroyWindowRequest = extern struct {
@@ -386,6 +396,25 @@ pub const Response = extern struct {
     sequence_number: u16,
     unknown_2: u32,
     unknown_3: [6]u32,
+
+    pub fn isError(r: *Response) ?*Error {
+        if (r.code == 0) {
+            return @ptrCast(r);
+        }
+        return null;
+    }
+
+    pub fn isReply(r: *Response) bool {
+        return r.code == 1;
+    }
+
+    pub fn isEvent(r: *Response) ?*Event {
+        std.debug.print("code is {}\n", .{r.code});
+        if ( r.code >= 2 and r.code <= 34 ) {
+            return @ptrCast(r);
+        }
+        return null;
+    }
 };
 
 pub const Error = extern struct {
@@ -500,6 +529,17 @@ pub const Connection = struct {
         bytes.len = data.len * 4;
         const written = try self.stream.write(bytes);
         if (data.len * 4 != written) return Err.ProtocolWriteError;
+    }
+
+    fn writeU8andPad(self: Connection, data: []const u8) !void {
+        const written = try self.stream.write(data);
+        if (data.len != written) return Err.ProtocolWriteError;
+        const pad_to_write = pad4of(data.len);
+        if (pad_to_write > 0) {
+            const values = [4]u8{ 0, 0, 0, 0 };
+            const wr = try self.stream.write(values[0..pad_to_write]);
+            if (pad_to_write != wr) return Err.ProtocolWriteError;
+        }
     }
 
     fn poll(self: Connection) !bool {
@@ -743,32 +783,32 @@ const WindowBitmask = struct {
 };
 
 const EventMask = struct {
-     const KeyPress = 0x00000001;
-     const KeyRelease = 0x00000002;
-     const ButtonPress = 0x00000004;
-     const ButtonRelease = 0x00000008;
-     const EnterWindow = 0x00000010;
-     const LeaveWindow = 0x00000020;
-     const PointerMotion = 0x00000040;
-     const PointerMotionHint = 0x00000080;
-     const Button1Motion = 0x00000100;
-     const Button2Motion = 0x00000200;
-     const Button3Motion = 0x00000400;
-     const Button4Motion = 0x00000800;
-     const Button5Motion = 0x00001000;
-     const ButtonMotion = 0x00002000;
-     const KeymapState = 0x00004000;
-     const Exposure = 0x00008000;
-     const VisibilityChange = 0x00010000;
-     const StructureNotify = 0x00020000;
-     const ResizeRedirect = 0x00040000;
-     const SubstructureNotify = 0x00080000;
-     const SubstructureRedirect = 0x00100000;
-     const FocusChange = 0x00200000;
-     const PropertyChange = 0x00400000;
-     const ColormapChange = 0x00800000;
-     const OwnerGrabButton = 0x01000000;
-     const unused_but_must_be_zero = 0xFE000000;
+    const KeyPress = 0x00000001;
+    const KeyRelease = 0x00000002;
+    const ButtonPress = 0x00000004;
+    const ButtonRelease = 0x00000008;
+    const EnterWindow = 0x00000010;
+    const LeaveWindow = 0x00000020;
+    const PointerMotion = 0x00000040;
+    const PointerMotionHint = 0x00000080;
+    const Button1Motion = 0x00000100;
+    const Button2Motion = 0x00000200;
+    const Button3Motion = 0x00000400;
+    const Button4Motion = 0x00000800;
+    const Button5Motion = 0x00001000;
+    const ButtonMotion = 0x00002000;
+    const KeymapState = 0x00004000;
+    const Exposure = 0x00008000;
+    const VisibilityChange = 0x00010000;
+    const StructureNotify = 0x00020000;
+    const ResizeRedirect = 0x00040000;
+    const SubstructureNotify = 0x00080000;
+    const SubstructureRedirect = 0x00100000;
+    const FocusChange = 0x00200000;
+    const PropertyChange = 0x00400000;
+    const ColormapChange = 0x00800000;
+    const OwnerGrabButton = 0x01000000;
+    const unused_but_must_be_zero = 0xFE000000;
 };
 
 const MapWindowRequest = extern struct {
@@ -955,6 +995,729 @@ const ErrorCode = enum(u8) {
     Implementation = 17,
 };
 
+pub const EventCode = enum(u8) {
+    KeyPress = 2,
+    KeyRelease = 3,
+    ButtonPress = 4,
+    ButtonRelease = 5,
+    MotionNotify = 6,
+    EnterNotify = 7,
+    LeaveNotify = 8,
+    FocusIn = 9,
+    FocusOut = 10,
+    KeymapNotify = 11,
+    Expose = 12,
+    GraphicsExposure = 13,
+    NoExposure = 14,
+    VisibilityNotify = 15,
+    CreateNotify = 16,
+    DestroyNotify = 17,
+    UnmapNotify = 18,
+    MapNotify = 19,
+    MapRequest = 20,
+    ReparentNotify = 21,
+    ConfigureNotify = 22,
+    ConfigureRequest = 23,
+    GravityNotify = 24,
+    ResizeRequest = 25,
+    CirculateNotify = 26,
+    CirculateRequest = 27,
+    PropertyNotify = 28,
+    SelectionClear = 29,
+    SelectionRequest = 30,
+    SelectionNotify = 31,
+    ColormapNotify = 32,
+    ClientMessage = 33,
+    MappingNotify = 34,
+};
+
+
+pub const Event = extern struct {
+
+    code: EventCode,
+    unknown_1: u8,
+    sequence_number: u16,
+    unknown_2: u32,
+    unknown_3: [6]u32,
+
+    pub fn isKeyPress(self: *Event) ?*KeyPress {
+        return if (self.code == EventCode.KeyPress) @ptrCast(self) else null;
+    }
+
+    const KeyPress = extern struct { 
+        code: EventCode = 2,       //      1     2                               code
+        detail: u8,     //      1     KEYCODE                         detail
+        number: u16,  //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,    //      4     WINDOW                          event
+        child: u32,    //      4     WINDOW                          child
+                         //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        screen: u8,     //      1     BOOL                            same-screen
+        unused: u8,     //      1                                     unused
+    };
+
+    pub fn isKeyRelease(self: *Event) ?*KeyRelease {
+        return if (self.code == EventCode.KeyRelease) @ptrCast(self) else null;
+    }
+
+    const KeyRelease = extern struct { 
+        code: u8,     //      1     3                               code
+        detail: u8,     //      1     KEYCODE                         detail
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        screen: u8,     //      1     BOOL                            same-screen
+        unused: u8,     //      1                                     unused
+
+    };
+
+    pub fn isButtonPress(self: *Event) ?*ButtonPress {
+        return if (self.code == EventCode.ButtonPress) @ptrCast(self) else null;
+    }
+
+    const ButtonPress = extern struct { 
+        code: u8,     //      1     4                               code
+        detail: u8,     //      1     BUTTON                          detail
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        screen: u8,     //      1     BOOL                            same-screen
+        unused: u8,     //      1                                     unused
+
+    };
+
+    pub fn isButtonRelease(self: *Event) ?*ButtonRelease {
+        return if (self.code == EventCode.ButtonRelease) @ptrCast(self) else null;
+    }
+
+    const ButtonRelease = extern struct { 
+        code: u8,     //      1     5                               code
+        detail: u8,     //      1     BUTTON                          detail
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        screen: u8,     //      1     BOOL                            same-screen
+        unused: u8,     //      1                                     unused
+
+    };
+
+    pub fn isMotionNotify(self: *Event) ?*MotionNotify {
+        return if (self.code == EventCode.MotionNotify) @ptrCast(self) else null;
+    }
+
+    const MotionNotify = extern struct { 
+        code: u8,     //      1     6                               code
+        detail: u8,     //      1                                     detail
+        //           0     Normal
+        //           1     Hint
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //            0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        screen: u8,     //      1     BOOL                            same-screen
+        unused: u8,     //      1                                     unused
+
+    };
+
+    pub fn isEnterNotify(self: *Event) ?*EnterNotify {
+        return if (self.code == EventCode.EnterNotify) @ptrCast(self) else null;
+    }
+
+    const EnterNotify = extern struct { 
+        code: u8,     //      1     7                               code
+        detail: u8,     //      1                                     detail
+        //           0     Ancestor
+        //           1     Virtual
+        //           2     Inferior
+        //           3     Nonlinear
+        //           4     NonlinearVirtual
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        mode: u8,     //      1                                     mode
+        //           0     Normal
+        //           1     Grab
+        //           2     Ungrab
+        focus: u8,     //      1                                     same-screen, focus
+        //           #x01     focus (1 is True, 0 is False)
+        //           #x02     same-screen (1 is True, 0 is False)
+        //           #xFC     unused
+
+    };
+
+    pub fn isLeaveNotify(self: *Event) ?*LeaveNotify {
+        return if (self.code == EventCode.LeaveNotify) @ptrCast(self) else null;
+    }
+
+    const LeaveNotify = extern struct { 
+        code: u8,     //      1     8                               code
+        detail: u8,     //      1                                     detail
+        //           0     Ancestor
+        //           1     Virtual
+        //           2     Inferior
+        //           3     Nonlinear
+        //           4     NonlinearVirtual
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        root: u32,     //      4     WINDOW                          root
+        event: u32,     //      4     WINDOW                          event
+        child: u32,     //      4     WINDOW                          child
+        //           0     None
+        root_x: i16,     //      2     INT16                           root-x
+        root_y: i16,     //      2     INT16                           root-y
+        event_x: i16,     //      2     INT16                           event-x
+        event_y: i16,     //      2     INT16                           event-y
+        state: u16,     //      2     SETofKEYBUTMASK                 state
+        mode: u8,     //      1                                     mode
+        //           0     Normal
+        //           1     Grab
+        //           2     Ungrab
+        focus: u8,     //      1                                     same-screen, focus
+        //           #x01     focus (1 is True, 0 is False)
+        //           #x02     same-screen (1 is True, 0 is False)
+        //           #xFC     unused
+
+    };
+
+    pub fn isFocusIn(self: *Event) ?*FocusIn {
+        return if (self.code == EventCode.FocusIn) @ptrCast(self) else null;
+    }
+
+    const FocusIn = extern struct { 
+        code: u8,     //      1     9                               code
+        detail: u8,     //      1                                     detail
+        //           0     Ancestor
+        //           1     Virtual
+        //           2     Inferior
+        //           3     Nonlinear
+        //           4     NonlinearVirtual
+        //           5     Pointer
+        //           6     PointerRoot
+        //           7     None
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        mode: u8,     //      1                                     mode
+        //           0     Normal
+        //           1     Grab
+        //           2     Ungrab
+        //           3     WhileGrabbed
+        // unused: u16,     //      23                                    unused
+        unused: [23]u8,
+
+    };
+
+    pub fn isFocusOut(self: *Event) ?*FocusOut {
+        return if (self.code == EventCode.FocusOut) @ptrCast(self) else null;
+    }
+
+    const FocusOut = extern struct { 
+        code: u8,     //      1     10                              code
+        detail: u8,     //      1                                     detail
+        //           0     Ancestor
+        //           1     Virtual
+        //           2     Inferior
+        //           3     Nonlinear
+        //           4     NonlinearVirtual
+        //           5     Pointer
+        //           6     PointerRoot
+        //           7     None
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        mode: u8,     //      1                                     mode
+        //           0     Normal
+        //           1     Grab
+        //           2     Ungrab
+        //           3     WhileGrabbed
+        // unused: u16,     //      23                                    unused
+        unused: [23]u8,
+
+    };
+
+    pub fn isKeymapNotify(self: *Event) ?*KeymapNotify {
+        return if (self.code == EventCode.KeymapNotify) @ptrCast(self) else null;
+    }
+
+    const KeymapNotify = extern struct { 
+        code: u8,     //      1     11                              code
+        //      31    LISTofCARD8                     keys (byte for keycodes 0-7 is
+        //                                            omitted)
+        keys: [31]u8,
+    };
+
+    pub fn isExpose(self: *Event) ?*Expose {
+        return if (self.code == EventCode.Expose) @ptrCast(self) else null;
+    }
+
+    const Expose = extern struct { 
+        code: u8,     //      1     12                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        x: u16,     //      2     CARD16                          x
+        y: u16,     //      2     CARD16                          y
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        count: u16,     //      2     CARD16                          count
+        // unused: u8,     //      14                                    unused
+        unused_2: [14]u8,
+    };
+
+    pub fn isGraphicsExposure(self: *Event) ?*GraphicsExposure {
+        return if (self.code == EventCode.GraphicsExposure) @ptrCast(self) else null;
+    }
+
+    const GraphicsExposure = extern struct { 
+        code: u8,     //      1     13                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        drawable: u32,     //      4     DRAWABLE                        drawable
+        x: u16,     //      2     CARD16                          x
+        y: u16,     //      2     CARD16                          y
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        minor_opcode: u16,     //      2     CARD16                          minor-opcode
+        count: u16,     //      2     CARD16                          count
+        major_opcode: u8,     //      1     CARD8                           major-opcode
+        // unused: u8,     //      11                                    unused
+        unused_2: [11]u8,
+
+    };
+
+    pub fn isNoExposure(self: *Event) ?*NoExposure {
+        return if (self.code == EventCode.NoExposure) @ptrCast(self) else null;
+    }
+
+    const NoExposure = extern struct { 
+        code: u8,     //      1     14                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        drawable: u32,     //      4     DRAWABLE                        drawable
+        minor_opcode: u16,     //      2     CARD16                          minor-opcode
+        major_opcode: u8,     //      1     CARD8                           major-opcode
+        // unused: u16,     //      21                                    unused
+        unused_2: [21]u8,
+
+    };
+
+    pub fn isVisibilityNotify(self: *Event) ?*VisibilityNotify {
+        return if (self.code == EventCode.VisibilityNotify) @ptrCast(self) else null;
+    }
+
+    const VisibilityNotify = extern struct { 
+        code: u8,     //      1     15                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        state: u8,     //      1                                     state
+        //           0     Unobscured
+        //           1     PartiallyObscured
+        //           2     FullyObscured
+        // unused: u16,     //      23                                    unused
+        unused_2: [23]u8,
+
+    };
+
+    pub fn isCreateNotify(self: *Event) ?*CreateNotify {
+        return if (self.code == EventCode.CreateNotify) @ptrCast(self) else null;
+    }
+
+    const CreateNotify = extern struct { 
+        code: u8,     //      1     16                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        parent: u32,     //      4     WINDOW                          parent
+        window: u32,     //      4     WINDOW                          window
+        x: i16,     //      2     INT16                           x
+        y: i16,     //      2     INT16                           y
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        border_width: u16,     //      2     CARD16                          border-width
+        redirect: u8,     //      1     BOOL                            override-redirect
+        //      9                                     unused
+        unused_2: [9]u8,
+
+    };
+
+    pub fn isDestroyNotify(self: *Event) ?*DestroyNotify {
+        return if (self.code == EventCode.DestroyNotify) @ptrCast(self) else null;
+    }
+
+    const DestroyNotify = extern struct { 
+        code: u8,     //      1     17                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        // unused: u16,     //      20                                    unused
+        unused_2: [20]u8,
+
+    };
+
+    pub fn isUnmapNotify(self: *Event) ?*UnmapNotify {
+        return if (self.code == EventCode.UnmapNotify) @ptrCast(self) else null;
+    }
+
+    const UnmapNotify = extern struct { 
+        code: u8,     //      1     18                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        configure: u8,     //      1     BOOL                            from-configure
+        // unused: u8,     //      19                                    unused
+        unused_2: [19]u8,
+
+    };
+
+    pub fn isMapNotify(self: *Event) ?*MapNotify {
+        return if (self.code == EventCode.MapNotify) @ptrCast(self) else null;
+    }
+
+    const MapNotify = extern struct { 
+        code: u8,     //      1     19                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        redirect: u8,     //      1     BOOL                            override-redirect
+        // unused: u8,     //      19                                    unused
+        unused_2: [19]u8,
+
+    };
+
+    pub fn isMapRequest(self: *Event) ?*MapRequest {
+        return if (self.code == EventCode.MapRequest) @ptrCast(self) else null;
+    }
+
+    const MapRequest = extern struct { 
+        code: u8,     //      1     20                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        parent: u32,     //      4     WINDOW                          parent
+        window: u32,     //      4     WINDOW                          window
+        // unused: u16,     //      20                                    unused
+        unused_2: [20]u8,
+
+    };
+
+    pub fn isReparentNotify(self: *Event) ?*ReparentNotify {
+        return if (self.code == EventCode.ReparentNotify) @ptrCast(self) else null;
+    }
+
+    const ReparentNotify = extern struct { 
+        code: u8,     //      1     21                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        parent: u32,     //      4     WINDOW                          parent
+        x: i16,     //      2     INT16                           x
+        y: i16,     //      2     INT16                           y
+        redirect: u8,     //      1     BOOL                            override-redirect
+        // unused: u8,     //      11                                    unused
+        unused_2: [11]u8,
+
+    };
+
+    pub fn isConfigureNotify(self: *Event) ?*ConfigureNotify {
+        return if (self.code == EventCode.ConfigureNotify) @ptrCast(self) else null;
+    }
+
+    const ConfigureNotify = extern struct { 
+        code: u8,     //      1     22                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        sibling: u32,     //      4     WINDOW                          above-sibling
+    //           0     None
+        x: i16,     //      2     INT16                           x
+        y: i16,     //      2     INT16                           y
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        border_width: u16,     //      2     CARD16                          border-width
+        redirect: u8,     //      1     BOOL                            override-redirect
+    //      5                                     unused
+        unused_2: [5]u8,
+
+    };
+
+    pub fn isConfigureRequest(self: *Event) ?*ConfigureRequest {
+        return if (self.code == EventCode.ConfigureRequest) @ptrCast(self) else null;
+    }
+
+    const ConfigureRequest = extern struct { 
+        code: u8,     //      1     23                              code
+        mode: u8,     //      1                                     stack-mode
+    //           0     Above
+    //           1     Below
+    //           2     TopIf
+    //           3     BottomIf
+    //           4     Opposite
+        number: u16,     //      2     CARD16                          sequence number
+        parent: u32,     //      4     WINDOW                          parent
+        window: u32,     //      4     WINDOW                          window
+        sibling: u32,     //      4     WINDOW                          sibling
+    //           0     None
+        x: i16,     //      2     INT16                           x
+        y: i16,     //      2     INT16                           y
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        border_width: u16,     //      2     CARD16                          border-width
+        mask: u16,     //      2     BITMASK                         value-mask
+        //           #x0001     x
+        //           #x0002     y
+        //           #x0004     width
+        //           #x0008     height
+        //           #x0010     border-width
+        //           #x0020     sibling
+        //           #x0040     stack-mode
+        // unused: u32,     //      4                                     unused
+        unused_2: [4]u8,
+
+    };
+
+    pub fn isGravityNotify(self: *Event) ?*GravityNotify {
+        return if (self.code == EventCode.GravityNotify) @ptrCast(self) else null;
+    }
+
+    const GravityNotify = extern struct { 
+        code: u8,     //      1     24                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        x: i16,     //      2     INT16                           x
+        y: i16,     //      2     INT16                           y
+        // unused: u8,     //      16                                    unused
+        unused_2: [16]u8,
+
+    };
+
+    pub fn isResizeRequest(self: *Event) ?*ResizeRequest {
+        return if (self.code == EventCode.ResizeRequest) @ptrCast(self) else null;
+    }
+
+    const ResizeRequest = extern struct { 
+        code: u8,     //      1     25                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        width: u16,     //      2     CARD16                          width
+        height: u16,     //      2     CARD16                          height
+        unused_2: u16,     //      20                                    unused
+        unused_3: [20]u8,
+    };
+
+    pub fn isCirculateNotify(self: *Event) ?*CirculateNotify {
+        return if (self.code == EventCode.CirculateNotify) @ptrCast(self) else null;
+    }
+
+    const CirculateNotify = extern struct { 
+        code: u8,     //      1     26                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        event: u32,     //      4     WINDOW                          event
+        window: u32,     //      4     WINDOW                          window
+        unused_2: u32,     //      4     WINDOW                          unused
+        place: u8,     //      1                                     place
+        //           0     Top
+        //           1     Bottom
+        // unused: u8,     //      15                                    unused
+        unused_3: [15]u8,
+    };
+
+    pub fn isCirculateRequest(self: *Event) ?*CirculateRequest {
+        return if (self.code == EventCode.CirculateRequest) @ptrCast(self) else null;
+    }
+
+    const CirculateRequest = extern struct { 
+        code: u8,     //      1     27                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        parent: u32,     //      4     WINDOW                          parent
+        window: u32,     //      4     WINDOW                          window
+        unused_2: u32,     //      4                                     unused
+        place: u8,     //      1                                     place
+        //           0     Top
+        //           1     Bottom
+        // unused: u8,     //      15                                    unused
+        unused_3: [15]u8,
+    };
+
+    pub fn isPropertyNotify(self: *Event) ?*PropertyNotify {
+        return if (self.code == EventCode.PropertyNotify) @ptrCast(self) else null;
+    }
+
+    const PropertyNotify = extern struct { 
+        code: u8,     //      1     28                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        atom: u32,     //      4     ATOM                            atom
+        time: u32,     //      4     TIMESTAMP                       time
+        state: u8,     //      1                                     state
+        //           0     NewValue
+        //           1     Deleted
+        // unused: u8,     //      15                                    unused
+        unused_2: [15]u8,
+    };
+
+    pub fn isSelectionClear(self: *Event) ?*SelectionClear {
+        return if (self.code == EventCode.SelectionClear) @ptrCast(self) else null;
+    }
+
+    const SelectionClear = extern struct { 
+        code: u8,     //      1     29                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        owner: u32,     //      4     WINDOW                          owner
+        selection: u32,     //      4     ATOM                            selection
+        // unused: u8,     //      16                                    unused
+        unused_2: [16]u8,
+    };
+
+    pub fn isSelectionRequest(self: *Event) ?*SelectionRequest {
+        return if (self.code == EventCode.SelectionRequest) @ptrCast(self) else null;
+    }
+
+    const SelectionRequest = extern struct { 
+        code: u8,     //      1     30                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        //           0     CurrentTime
+        owner: u32,     //      4     WINDOW                          owner
+        property: u32,     //      4     WINDOW                      property
+        //           0     None
+        //      8                                     unused
+        unused_2: [8]u8,
+    };
+
+    pub fn isColormapNotify(self: *Event) ?*ColormapNotify {
+        return if (self.code == EventCode.ColormapNotify) @ptrCast(self) else null;
+    }
+
+    const ColormapNotify = extern struct {
+        //  1     32                              code
+        //  1                                     unused
+        //  2     CARD16                          sequence number
+        //  4     WINDOW                          window
+        //  4     COLORMAP                        colormap
+        //       0     None
+        //  1     BOOL                            new
+        //  1                                     state
+        //       0     Uninstalled
+        //       1     Installed
+        //  18                                    unused
+        code: u8,     //      1     32                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        colormap: u32,     //      4     COLORMAP               events
+        new: u8,
+        state: u8,
+        unused_2: [18]u8,
+    };
+
+    pub fn isClientMessage(self: *Event) ?*ClientMessage {
+        return if (self.code == EventCode.ClientMessage) @ptrCast(self) else null;
+    }
+
+    const ClientMessage = extern struct { 
+        code: u8,     //      1     33                              code
+        format: u8,     //      1     CARD8                           format
+        number: u16,     //      2     CARD16                          sequence number
+        window: u32,     //      4     WINDOW                          window
+        type: u32,     //      4     ATOM                            type
+        data: [20]u8,     //      20                                    data
+    };
+
+    pub fn isMappingNotify(self: *Event) ?*MappingNotify {
+        return if (self.code == EventCode.MappingNotify) @ptrCast(self) else null;
+    }
+
+    const MappingNotify = extern struct { 
+        code: u8,     //      1     34                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        request: u8,     //      1                                     request
+        //           0     Modifier
+        //           1     Keyboard
+        //           2     Pointer
+        keycode: u8,     //      1     KEYCODE                         first-keycode
+        count: u8,     //      1     CARD8                           count
+        unused_2: [25]u8,     //      25                                    unused
+    };
+
+    pub fn isSelectionNotify(self: *Event) ?*SelectionNotify {
+        return if (self.code == EventCode.SelectionNotify) @ptrCast(self) else null;
+    }
+
+    const SelectionNotify = extern struct { 
+        code: u8,     //      1     31                              code
+        unused: u8,     //      1                                     unused
+        number: u16,     //      2     CARD16                          sequence number
+        time: u32,     //      4     TIMESTAMP                       time
+        //           0     CurrentTime
+        requestor: u32,     //      4     WINDOW                          requestor
+        selection: u32,     //      4     ATOM                            selection
+        target: u32,     //      4     ATOM                            target
+        property: u32,     //      4     ATOM                            property
+        //           0     None
+        //      8                                     unused
+        unused_2: [8]u8,
+    };
+
+ };
+
+
 test "parse display" {
     const parse = parseDisplay;
     const eq = std.testing.expectEqualDeep;
@@ -996,4 +1759,45 @@ test "pad4 works as expected" {
     try expect(pad4(3) == 4);
     try expect(pad4(4) == 4);
     try expect(pad4(5) == 8);
+}
+
+test "all events should have 32 bytes" {
+    // this is important as we are communicating over binary procotol
+    // the struct size need to be perfectly aligned
+    const expect = std.testing.expect;
+    try expect(@sizeOf(Event) == 32);
+    try expect(@sizeOf(Event.KeyPress) == 32);
+    try expect(@sizeOf(Event.KeyRelease) == 32);
+    try expect(@sizeOf(Event.ButtonPress) == 32);
+    try expect(@sizeOf(Event.ButtonRelease) == 32);
+    try expect(@sizeOf(Event.MotionNotify) == 32);
+    try expect(@sizeOf(Event.EnterNotify) == 32);
+    try expect(@sizeOf(Event.LeaveNotify) == 32);
+    try expect(@sizeOf(Event.FocusIn) == 32);
+    try expect(@sizeOf(Event.FocusOut) == 32);
+    try expect(@sizeOf(Event.KeymapNotify) == 32);
+    try expect(@sizeOf(Event.Expose) == 32);
+    try expect(@sizeOf(Event.GraphicsExposure) == 32);
+    try expect(@sizeOf(Event.NoExposure) == 32);
+    try expect(@sizeOf(Event.VisibilityNotify) == 32);
+    try expect(@sizeOf(Event.CreateNotify) == 32);
+    try expect(@sizeOf(Event.DestroyNotify) == 32);
+    try expect(@sizeOf(Event.UnmapNotify) == 32);
+    try expect(@sizeOf(Event.MapNotify) == 32);
+    try expect(@sizeOf(Event.MapRequest) == 32);
+    try expect(@sizeOf(Event.ReparentNotify) == 32);
+    try expect(@sizeOf(Event.ConfigureNotify) == 32);
+    try expect(@sizeOf(Event.ConfigureRequest) == 32);
+    try expect(@sizeOf(Event.GravityNotify) == 32);
+    try expect(@sizeOf(Event.ResizeRequest) == 32);
+    try expect(@sizeOf(Event.CirculateNotify) == 32);
+    try expect(@sizeOf(Event.CirculateRequest) == 32);
+    try expect(@sizeOf(Event.PropertyNotify) == 32);
+    try expect(@sizeOf(Event.SelectionClear) == 32);
+    try expect(@sizeOf(Event.SelectionRequest) == 32);
+    try expect(@sizeOf(Event.ColormapNotify) == 32);
+    try expect(@sizeOf(Event.MappingNotify) == 32);
+    try expect(@sizeOf(Event.SelectionNotify) == 32);
+    try expect(@sizeOf(Event.ColormapNotify) == 32);
+    try expect(@sizeOf(Event.MappingNotify) == 32);
 }

@@ -29,8 +29,8 @@ pub fn main() !void {
     while (ui.nextEvent(.{ .blocking = true })) |evt| {
         switch (evt) {
             ui.Event.paint => {
-                var x: i16 = @intCast(canvas.width / 3);
-                var y: i16 = @intCast(canvas.height / 3);
+                const x: i16 = @intCast(canvas.width / 3);
+                const y: i16 = @intCast(canvas.height / 3);
                 canvas.clear(0xff202020);
                 try drawFrame(&canvas, &font, x, y, 500, 400);
                 try testFontRender(&canvas, &font);
@@ -53,8 +53,8 @@ fn drawFrame(canvas: *Canvas, font: *Font, x: i16, y: i16, width: i16, height: i
     canvas.rect(x, y + 32, x + width, y + height, 0xff282828);
     try ui.drawText(canvas, font, 14, 0xff909090, @intCast(x + width - 16 - 6), @intCast(y + 16 - 11), "x");
 
-    var bottom = y + height;
-    var right = x + width;
+    const bottom = y + height;
+    const right = x + width;
     try drawButton(canvas, right - 80 - 16, bottom - 24 - 16, 80, 24, font, "Cancel");
     try drawButton(canvas, right - 80 - 16 - 80 - 8, bottom - 24 - 16, 80, 24, font, "Ok");
 }

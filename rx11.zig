@@ -18,24 +18,36 @@ pub fn main() !void {
     try x11.setName(conn, win, "X11 Test Window");
     try x11.createPixmap(conn, pixmap, win, 640, 480);
     try x11.createDefaultGC(conn, pixmapgc, pixmap);
+    // try x11.createGC(conn, pixmapgc, pixmap, x11.GCBitmaskValues.color., values: []const u32)
 
-    var rand = std.rand.DefaultPrng.init(0);
+
+    // var rand = std.rand.DefaultPrng.init(0);
 
     // try rx11.createGC(conn, foreground, win, rx11.GCBitmaskValues.foreground, &[1]u32{ 0x00f00080 });    
 
-    try x11.putImage(conn, pixmap, pixmapgc, 2, 2, 4, 16, &[4]u32 { 0,0,0,0 });
+    // try x11.putImage(conn, pixmap, pixmapgc, 0, 0, 4, 16, &[0]u8 { });
+    // // try x11.putImage(conn, win, foreground, 0, 0, 4, 16, &[0]u32 {  });
 
-        // try rx11.putImage(conn, win, foreground, 0, 0, 4, 16, &[0]u32 {  });
 
-    while(true) {
-        // while (try rx11.hasInput(conn)) {
+
+    while (true) {
+        // while (try x11.hasInput(conn)) {
         // } 
+        std.debug.print("hello\n", .{});
         try x11.readInput(conn, input[0..64]);
-        const color: u32 = @intCast(rand.next() & 0xffffff);
-        try x11.createGC(conn, foreground, pixmap, x11.GCBitmaskValues.foreground, &[1]u32{ color });   
-        try x11.polyFillRectangle(conn, pixmap, foreground, 0, 0, 9999, 9999);
+        try x11.createGC(conn, foreground, win, x11.GCBitmaskValues.foreground, &[1]u32{ 0xff00ff });   
+        try x11.polyFillRectangle(conn, win, foreground, 0, 0, 9999, 9999);
         try x11.freeGC(conn, foreground);
-        try x11.copyArea(conn, pixmap, win, gc, 0, 0, 0, 0, 640, 480);
     }
+    // while(true) {
+    //     // while (try rx11.hasInput(conn)) {
+    //     // } 
+    //     try x11.readInput(conn, input[0..64]);
+    //     // const color: u32 = @intCast(rand.next() & 0xffffff);
+    //     // try x11.createGC(conn, foreground, pixmap, x11.GCBitmaskValues.foreground, &[1]u32{ color });   
+    //     // try x11.polyFillRectangle(conn, pixmap, foreground, 0, 0, 9999, 9999);
+    //     // try x11.freeGC(conn, foreground);
+    //     try x11.copyArea(conn, pixmap, win, gc, 0, 0, 0, 0, 640, 480);
+    // }
    
 }
