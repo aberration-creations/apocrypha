@@ -42,6 +42,10 @@ pub fn presentCanvas32(w: Window, c: Canvas32) void {
     w.presentCanvasU32BGRA(@intCast(c.width), @intCast(c.height), c.pixels);
 }
 
+pub fn presentWithDeltaCanvas32(w: Window, c: Canvas32, delta: *Canvas32) void {
+    w.presentCanvasWithDeltaU32BGRA(@intCast(c.width), @intCast(c.height), c.pixels, &delta.pixels);
+}
+
 test {
     _ = @import("./math/math.zig");
     _ = @import("./canvas/canvas.zig");

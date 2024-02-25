@@ -14,7 +14,7 @@ pub const EventData = common.EventData;
 pub const WindowCreateOptions = common.WindowCreateOptions;
 
 pub const win32 = @import("adapters/win32.zig");
-pub const x11 = @import("adapters/x11.zig");
+pub const xcb = @import("adapters/xcb.zig");
 pub const rx11 = @import("adapters/rx11.zig");
 
 const maxWindowCount = 16;
@@ -22,8 +22,8 @@ var nextWindowHandle: u16 = 0;
 var window_count: u16 = 0;
 var win32W: [maxWindowCount]win32.Window = undefined;
 
-var x11W: [maxWindowCount]x11.X11Window = undefined;
-var x11C: x11.X11Connection = undefined;
+var x11W: [maxWindowCount]xcb.X11Window = undefined;
+var x11C: xcb.X11Connection = undefined;
 var x11C_connected: bool = false;
 
 var rx11C: rx11.Connection = undefined;
@@ -55,10 +55,10 @@ pub const Window = struct {
                 }
                 else {
                     if (!x11C_connected) {
-                        x11C = x11.X11Connection.init();
+                        x11C = xcb.X11Connection.init();
                         x11C_connected = true;
                     }
-                    x11W[handle] = x11.X11Window.init(&x11C, options);
+                    x11W[handle] = xcb.X11Window.init(&x11C, options);
                 }
             },
             else => @compileError("not supported"),
@@ -102,7 +102,6 @@ pub const Window = struct {
         switch (subsystem) {
             .linux => {
                 if (userx11) {
-                    std.debug.print("present\n", .{});
                     rx11W[self.handle].presentCanvasU32BGRA(width, height, data) catch @panic("failed");
                 }
                 else {
@@ -113,6 +112,24 @@ pub const Window = struct {
             else => @compileError("not supported"),
         }
     }
+
+    pub fn presentCanvasWithDeltaU32BGRA(self: Self, width: u16, height: u16, data: []u32, delta: *[]u32) void {
+        switch (subsystem) {
+            .linux => {
+                if (userx11) {
+                    rx11W[self.handle].presentCanvasWithDeltaU32BGRA(width, height, data, delta) catch @panic("failed");
+                }
+                else {
+                    // use fallback
+                    x11W[self.handle].presentCanvasU32BGRA(width, height, data);
+                }
+            },
+            // use fallback
+            .windows => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
+            else => @compileError("not supported"),
+        }
+    }
+
 };
 
 /// waits for the next UI event

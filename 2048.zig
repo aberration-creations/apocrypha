@@ -12,6 +12,7 @@ const Cell = struct {
 
 var window: ui.Window = undefined;
 var canvas: ui.Canvas32 = undefined;
+var danvas: ui.Canvas32 = undefined;
 var font: ui.Font = undefined;
 var game: [4][4]Cell = .{.{.{}} ** 4} ** 4;
 var is_animating = false;
@@ -29,7 +30,9 @@ pub fn main() !void {
     }
     
     canvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
+    danvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
     defer canvas.deinit();
+    defer danvas.deinit();
 
     window = ui.Window.init(.{
         .title = "2048 Game",
@@ -58,7 +61,10 @@ pub fn main() !void {
                     .down => try move(0, 1),
                     else => {},
                 },
-                .resize => |size| try canvas.reallocate(size.width, size.height),
+                .resize => |size| {
+                    try canvas.reallocate(size.width, size.height);
+                    try danvas.reallocate(size.width, size.height);
+                },
                 .closewindow => return,
                 else => {},
             }
@@ -71,7 +77,6 @@ pub fn main() !void {
 }
 
 fn move(dir_x: i32, dir_y: i32) !void {
-    std.debug.print("move {} {}", .{ dir_x, dir_y });
     var moved = false;
     var merge_score: usize = 0;
 
@@ -169,7 +174,6 @@ fn moveCell(x: usize, y: usize, dx: i32, dy: i32) struct { moved: bool, score: u
 }
 
 fn render() !void {
-    std.debug.print("render", .{});
     const now = std.time.milliTimestamp();
     var dt: f32 = 0;
     if (is_animating) {
@@ -291,7 +295,7 @@ fn render() !void {
     const anim_sy = score_y0 + @as(i16, @intFromFloat(score_delta_t * score_delta_t * -50));
     try ui.drawTextV2(&canvas, &font, 24, anim_color, anim_sx, anim_sy, str2);
 
-    ui.presentCanvas32(window, canvas);
+    ui.presentWithDeltaCanvas32(window, canvas, &danvas);
 }
 
 fn addRandomValue() void {

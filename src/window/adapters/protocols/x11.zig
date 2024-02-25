@@ -16,28 +16,43 @@ pub const Err = error{
     ConnectionSetupUnknownReply,
 };
 
+const defaultEventMask = EventMask.ButtonPress | EventMask.Exposure 
+        | EventMask.ButtonRelease | EventMask.PointerMotion | EventMask.EnterWindow | EventMask.LeaveWindow
+        | EventMask.KeyPress | EventMask.KeyRelease | EventMask.StructureNotify;
+
 pub fn createWindow(conn: Connection, window_id: u32) !void {
     const n = 2;
-    const request = CreateWindowRequest{
+    try createWindowRaw(conn, .{
         .wid = window_id,
         .parent = conn.first_screen_id,
         .request_length = @sizeOf(CreateWindowRequest) / 4 + n,
         .bitmask = WindowBitmask.event_mask | WindowBitmask.colormap,
-        .visual = conn.first_screen.root_visual,
-        .depth = conn.first_screen.root_depth,
-    };
+    }, &([n]u32{
+        defaultEventMask,
+        conn.first_screen.default_colormap
+    }));
+}
+
+pub fn createWindowWithSize(conn: Connection, window_id: u32, x: i16, y: i16, width: u16, height: u16) !void {
+    const n = 2;
+    try createWindowRaw(conn, .{
+        .wid = window_id,
+        .parent = conn.first_screen_id,
+        .request_length = @sizeOf(CreateWindowRequest) / 4 + n,
+        .bitmask = WindowBitmask.event_mask | WindowBitmask.colormap,
+        .width = width,
+        .height = height,
+        .x = x,
+        .y = y,
+    }, &([n]u32{
+        defaultEventMask,
+        conn.first_screen.default_colormap
+    }));
+}
+
+pub fn createWindowRaw(conn: Connection, request: CreateWindowRequest, optionals: []const u32) !void {
     try conn.writeStruct(request);
-    const event_mask: u32 = EventMask.ButtonPress | EventMask.Exposure 
-        | EventMask.ButtonRelease | EventMask.PointerMotion | EventMask.EnterWindow | EventMask.LeaveWindow
-        | EventMask.KeyPress | EventMask.KeyRelease | EventMask.StructureNotify;
-            //    x.XCB_EVENT_MASK_EXPOSURE | x.XCB_EVENT_MASK_BUTTON_PRESS |
-            //         x.XCB_EVENT_MASK_BUTTON_RELEASE | x.XCB_EVENT_MASK_POINTER_MOTION |
-            //         x.XCB_EVENT_MASK_ENTER_WINDOW | x.XCB_EVENT_MASK_LEAVE_WINDOW |
-            //         x.XCB_EVENT_MASK_KEY_PRESS | x.XCB_EVENT_MASK_KEY_RELEASE |
-            //         x.XCB_EVENT_MASK_STRUCTURE_NOTIFY,
-    try conn.writeStruct(event_mask);
-    const colormap: u32 = conn.first_screen.default_colormap;
-    try conn.writeStruct(colormap);
+    try conn.writeU32(optionals);
 }
 
 pub fn mapWindow(conn: Connection, window_id: u32) !void {
@@ -409,7 +424,6 @@ pub const Response = extern struct {
     }
 
     pub fn isEvent(r: *Response) ?*Event {
-        std.debug.print("code is {}\n", .{r.code});
         if ( r.code >= 2 and r.code <= 34 ) {
             return @ptrCast(r);
         }

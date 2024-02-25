@@ -15,7 +15,9 @@ pub fn main() !void {
     }
 
     var canvas = try Canvas.initAlloc(allocator, 1920, 1080);
+    var dcanvas = try Canvas.initAlloc(allocator, 1920, 1080);
     defer canvas.deinit();
+    defer dcanvas.deinit();
 
     const window = ui.Window.init(.{
         .title = "Text Example",
@@ -46,7 +48,10 @@ pub fn main() !void {
                 ui.Key.escape => return,
                 else => {},
             },
-            ui.Event.resize => |size| try canvas.reallocate(size.width, size.height),
+            ui.Event.resize => |size| { 
+                try canvas.reallocate(size.width, size.height);
+                try dcanvas.reallocate(size.width, size.height);
+            },
             ui.Event.closewindow => return,
             else => {},
         };
@@ -101,7 +106,7 @@ pub fn main() !void {
             std.time.sleep(1);
         }
         // try ui.dumpCanvasToStdout(canvas);
-        ui.presentCanvas32(window, canvas);
+        ui.presentWithDeltaCanvas32(window, canvas, &dcanvas);
     }
 
 }

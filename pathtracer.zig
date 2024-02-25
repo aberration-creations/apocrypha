@@ -28,7 +28,9 @@ pub fn main() !void {
     try parseCliArguments(allocator, &cfg);
     
     var canvas = ui.Canvas32.initAllocEmpty(allocator);
+    var dcanvas = ui.Canvas32.initAllocEmpty(allocator);
     defer canvas.deinit();
+    defer dcanvas.deinit();
 
     var window = ui.Window.init(.{ .fullscreen = cfg.fullscreen, .title = "Pathtracer" });
     defer window.deinit();
@@ -48,9 +50,10 @@ pub fn main() !void {
                     if (size.width != canvas.width or size.height != canvas.height)
                     {
                         try canvas.reallocate(size.width, size.height);
+                        try dcanvas.reallocate(size.width, size.height);
                         is_rendering = true;
                         canvas.clear(0);
-                        ui.presentCanvas32(window, canvas);
+                        ui.presentWithDeltaCanvas32(window, canvas, &dcanvas);
                     }
                 },
                 .keydown => |key| {
@@ -65,16 +68,16 @@ pub fn main() !void {
 
         if (cfg.threads > 0)
         {
-            try multithreadedRenderer(allocator, window, &canvas);
+            try multithreadedRenderer(allocator, window, &canvas, &dcanvas);
         }
         else {
-            progressiveRendererer(window, &canvas);
+            progressiveRendererer(window, &canvas, &dcanvas);
         }
         
     }
 }
 
-fn multithreadedRenderer(allocator: std.mem.Allocator, window: ui.Window, canvas: *ui.Canvas32) !void {
+fn multithreadedRenderer(allocator: std.mem.Allocator, window: ui.Window, canvas: *ui.Canvas32, dcanvas: *ui.Canvas32) !void {
     
     if (!is_rendering){
         return;
@@ -83,7 +86,7 @@ fn multithreadedRenderer(allocator: std.mem.Allocator, window: ui.Window, canvas
     var threads = try allocator.alloc(std.Thread, @max(1, cfg.threads));
     defer allocator.free(threads);
     canvas.clear(0);
-    ui.presentCanvas32(window, canvas.*);
+    ui.presentWithDeltaCanvas32(window, canvas.*, dcanvas);
 
     // fork-join style multithreading
 
@@ -98,10 +101,10 @@ fn multithreadedRenderer(allocator: std.mem.Allocator, window: ui.Window, canvas
     }
 
     is_rendering = false;
-    ui.presentCanvas32(window, canvas.*);
+    ui.presentWithDeltaCanvas32(window, canvas.*, dcanvas);
 }
 
-fn progressiveRendererer(window: ui.Window, canvas: *ui.Canvas32) void {
+fn progressiveRendererer(window: ui.Window, canvas: *ui.Canvas32, dcanvas: *ui.Canvas32) void {
     var x = progress_x;
     var y = progress_y;
     var k = progress_k;
@@ -117,7 +120,7 @@ fn progressiveRendererer(window: ui.Window, canvas: *ui.Canvas32) void {
 
         if (k == 0) {
             is_rendering = false;
-            ui.presentCanvas32(window, canvas.*);
+            ui.presentWithDeltaCanvas32(window, canvas.*, dcanvas);
         }
     }
 
@@ -144,7 +147,7 @@ fn progressiveRendererer(window: ui.Window, canvas: *ui.Canvas32) void {
     if (last_present != now)
     {
         last_present = now;
-        ui.presentCanvas32(window, canvas.*);
+        ui.presentWithDeltaCanvas32(window, canvas.*, dcanvas);
     }
 
     progress_x = x;

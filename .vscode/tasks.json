@@ -16,13 +16,13 @@
             "problemMatcher": []
         },
         {
-            "label": "internalfont linux",
+            "label": "internalfont xcb",
             "type": "shell",
             "command": "clear && zig run internalfont.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
         },
         {
-            "label": "rectangles linux",
+            "label": "rectangles xcb",
             "type": "shell",
             "command": "clear && zig run rectangles.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
@@ -40,7 +40,7 @@
             "problemMatcher": []
         },
         {
-            "label": "xortexture linux",
+            "label": "xortexture xcb",
             "type": "shell",
             "command": "clear && zig run xortexture.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
@@ -54,17 +54,17 @@
         {
             "label": "pathtracer",
             "type": "shell",
-            "command": "clear && zig run pathtracer.zig",
+            "command": "clear && zig run pathtracer.zig -Drelease-fast -- --threads 60",
             "problemMatcher": []
         },
         {
-            "label": "pathtracer linux",
+            "label": "pathtracer xcb",
             "type": "shell",
             "command": "clear && zig run pathtracer.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
         },
         {
-            "label": "2048 linux",
+            "label": "2048 xcb",
             "type": "shell",
             "command": "clear && zig run 2048.zig -lc -lxcb -lxcb-image",
             "problemMatcher": []
@@ -72,7 +72,7 @@
         {
             "label": "2048",
             "type": "shell",
-            "command": "clear && zig run 2048.zig",
+            "command": "clear && zig run 2048.zig -Drelease-fast",
             "problemMatcher": []
         },
         {

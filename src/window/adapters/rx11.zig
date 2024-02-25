@@ -45,7 +45,7 @@ pub const Window = struct {
     
     pub fn init(c: *Connection, opt: WindowOptions) !Window {
         const id = c.conn.generateResourceId();
-        try protocol.createWindow(c.conn, id);
+        try protocol.createWindowWithSize(c.conn, id, opt.x, opt.y, opt.width, opt.height);
         try protocol.setName(c.conn, id, opt.title);
         try protocol.mapWindow(c.conn, id);
         return Window {
@@ -60,12 +60,6 @@ pub const Window = struct {
     }
 
     pub fn presentCanvasU32BGRA(w: *Window, width: u16, height: u16, data: []u32) !void {
-        // var pixel_count: usize = @intCast(width);
-        // pixel_count *= height;
-        // var dataslice: []u8 = undefined;
-        // dataslice.ptr = @as([*]u8, @ptrCast(data));
-        // dataslice.len = pixel_count * 4;
-        // w.presentCanvas(width, height, dataslice);
         if (width == 0 or height == 0) {
             return;
         }
@@ -97,16 +91,70 @@ pub const Window = struct {
         }
 
     }
-};
 
+    pub fn presentCanvasWithDeltaU32BGRA(w: *Window, width: u16, height: u16, data: []u32, deltabuffer: *[]u32) !void {
+        if (width == 0 or height == 0) {
+            return;
+        }
+        var requests: usize = 0;
+        var written: usize = 0;
+        var skipped: usize = 0;
+        for (0..height) |y| {
+            const from: usize = y * width;
+            const to: usize = from + width;
+            const slice = data[from..to];
+            const dslice = deltabuffer.*[from..to];
+            var value_prev = slice[0];
+            var value_from: usize = 0;
+            var value_count: usize = 0;
+            for (slice, dslice, 0..) |value, dvalue, x| {
+                if (value == dvalue) {
+                    if (value_count > 0) {
+                        try protocol.createGC(w.c.conn, w.gc, w.id, protocol.GCBitmaskValues.foreground, &[1]u32{ value_prev });   
+                        try protocol.polyFillRectangle(w.c.conn, w.id, w.gc, @intCast(value_from), @intCast(y), @intCast(value_count), 1);
+                        try protocol.freeGC(w.c.conn, w.gc);
+                        value_count = 0;
+                        requests += 1;
+                        written += value_count;
+                    }
+                    skipped += 1;
+                    value_from = x;
+                    value_prev = 0;
+                }
+                else if (value != value_prev){
+                    try protocol.createGC(w.c.conn, w.gc, w.id, protocol.GCBitmaskValues.foreground, &[1]u32{ value_prev });   
+                    try protocol.polyFillRectangle(w.c.conn, w.id, w.gc, @intCast(value_from), @intCast(y), @intCast(value_count), 1);
+                    try protocol.freeGC(w.c.conn, w.gc);
+                    requests += 1;
+                    written += value_count;
+                    value_prev = value;
+                    value_from = x;
+                    value_count = 1;
+                }
+                else {
+                    value_count += 1;
+                }
+                dslice[x] = value;
+            }
+            if (value_count > 0) {
+                try protocol.createGC(w.c.conn, w.gc, w.id, protocol.GCBitmaskValues.foreground, &[1]u32{ value_prev });   
+                try protocol.polyFillRectangle(w.c.conn, w.id, w.gc, @intCast(value_from), @intCast(y), @intCast(value_count), 1);
+                try protocol.freeGC(w.c.conn, w.gc);
+                requests += 1;
+                written += value_count;
+            }
+        }
+        std.debug.print("req {} wr {} sk {}\n", .{ requests, written, skipped });
+    }
+};
 
 pub fn eventDataFrom(res: *protocol.Response) common.EventData {
     const EventData = common.EventData;
     if (res.isEvent()) |event| {
-        std.debug.print("read event data from {}\n", .{event});
         return eventDataFromEvent(event);
+    } else {
+        return EventData { .unknown = undefined };
     }
-    return EventData { .unknown = undefined };
 }
 
 pub fn eventDataFromEvent(event: *protocol.Event) common.EventData {
