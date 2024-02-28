@@ -189,9 +189,11 @@ pub fn eventDataFromEvent(event: *protocol.Event) common.EventData {
             else => .unknown,
         } };
     }
-    else if (event.isMotionNotify()) |_| {
-        // std.debug.print("motion {} {}\n", .{ motionEvent.event_x, motionEvent.event_x });
-        return EventData{ .unknown = undefined };
+    else if (event.isMotionNotify()) |motionEvent| {
+        return EventData{ .pointermove = .{
+            .x = motionEvent.event_x,
+            .y = motionEvent.event_y,
+        } };
     }
     else if (event.isNoExposure()) |_| {
         // std.debug.print("no exposure {} \n", .{noExposure.major_opcode});

@@ -29,6 +29,7 @@ var x11C_connected: bool = false;
 var rx11C: rx11.Connection = undefined;
 var rx11W: [maxWindowCount]rx11.Window = undefined;
 var rx11C_connected: bool = false;
+var rx11_has_invalidated_rect = false;
 
 /// cross-platform Window primite,
 /// in general you need one to get something on screen
@@ -134,6 +135,11 @@ pub const Window = struct {
         _ = opt;
         switch (subsystem) {
             .windows => win32W[self.handle].invalidateRect(),
+            .linux => if (userx11) {
+                rx11_has_invalidated_rect = true;
+            } else {
+                @compileError("not supported");
+            },
             else => @compileError("not supported"),
         }
     }
@@ -146,8 +152,15 @@ pub fn nextEvent(options: NextEventOptions) ?EventData {
     return switch (subsystem) {
         .windows => win32.nextEvent(options),
         .linux => if (userx11) {
-            if (!options.blocking and !(rx11C.hasInput() catch @panic("event handling failed"))) {
-                return null;
+            const blocking = options.blocking and !rx11_has_invalidated_rect;
+            if (!blocking and !(rx11C.hasInput() catch @panic("event handling failed"))) {
+                if (rx11_has_invalidated_rect) {
+                    rx11_has_invalidated_rect = false;
+                    // TODO: emit event per window
+                    return EventData { .paint = undefined };
+                } else {
+                    return null;
+                }
             }
             return rx11C.readInput() catch @panic("event read failed");
         } else {
