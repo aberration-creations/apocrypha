@@ -106,6 +106,7 @@ pub fn Canvas(comptime P: type) type {
 
         // Draws a rectangle at given position and color.
         pub fn rect(self: *Self, x0: i32, y0: i32, x1: i32, y1: i32, p: P) void {
+            if (x0 >= x1 or y0 >= y1) return;
             var clip_x0: usize = 0;
             var clip_y0: usize = 0;
             var clip_x1: usize = 0;
@@ -203,6 +204,16 @@ test "rect on canvas" {
     try std.testing.expectEqual(c.getPixel(7, 7), 0xffffff);
     try std.testing.expectEqual(c.getPixel(8, 8), 0x000000);
 }
+
+test "rect with flipped coords does nothing" {
+    var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
+    defer c.deinit();
+    c.clear(0x000000);
+    c.rect(8, 8, 4, 4, 0xffffff);
+    try std.testing.expectEqual(c.getPixel(4, 4), 0x000000);
+    try std.testing.expectEqual(c.getPixel(8, 8), 0x000000);
+}
+
 
 test "reallocate" {
     var c = try Canvas(u32).initAlloc(std.testing.allocator, 16, 16);
