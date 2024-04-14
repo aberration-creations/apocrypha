@@ -189,6 +189,18 @@ pub fn eventDataFromEvent(event: *protocol.Event) common.EventData {
             else => .unknown,
         } };
     }
+    else if (event.isButtonRelease()) |buttonRelease| {
+        return EventData{ .pointerup = .{
+            .x = buttonRelease.event_x,
+            .y = buttonRelease.event_y,
+        } };
+    }
+    else if (event.isButtonPress()) |buttonPress| {
+        return EventData{ .pointerdown = .{
+            .x = buttonPress.event_x,
+            .y = buttonPress.event_y,
+        } };
+    }
     else if (event.isMotionNotify()) |motionEvent| {
         return EventData{ .pointermove = .{
             .x = motionEvent.event_x,
