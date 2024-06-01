@@ -1,10 +1,6 @@
 const std = @import("std");
 const common = @import("./common.zig");
 
-pub const MSG = user32.MSG;
-pub const user32 = win32.user32;
-pub const gdi32 = win32.gdi32;
-
 const EventData = common.EventData;
 const Event = common.Event;
 const Key = common.Key;
@@ -13,13 +9,22 @@ const win32 = std.os.windows;
 const BOOL = win32.BOOL;
 const DWORD = win32.DWORD;
 const ATOM = u16;
+const HMENU = win32.HMENU;
+const LPVOID = win32.LPVOID;
 const HINSTANCE = win32.HINSTANCE;
 const HICON = win32.HICON;
 const HCURSOR = win32.HCURSOR;
+const LPCSTR = win32.LPCSTR;
 const HGDIOBJ = *opaque {};
 // const HBITMAP = *opaque {}; use HGDIOBJ
 const HDC = win32.HDC;
 const HWND = win32.HWND;
+const WPARAM = win32.WPARAM;
+const LPARAM = win32.LPARAM;
+const POINT = win32.POINT;
+const UINT = win32.UINT;
+const LRESULT = win32.LRESULT;
+const HBRUSH = win32.HBRUSH;
 
 const SM_CXSCREEN = 0;
 const SM_CYSCREEN = 1;
@@ -30,12 +35,52 @@ const SRCCOPY: DWORD = 0x00CC0020;
 const IDI_APPLICATION = 32512;
 const IDC_ARROW = 32512;
 
+const MSG = extern struct {
+    hwnd: HWND,
+    message: UINT,
+    wParam: WPARAM,
+    lParam: LPARAM,
+    time: DWORD,
+    pt: POINT,
+    lPrivate: DWORD,
+};
+const LPMSG = *MSG;
+
+const WNDCLASSEXA = extern struct {
+    cbSize: UINT,
+    style: UINT,
+    lpfnWndProc: WNDPROC,
+    cbClsExtra: c_int = 0,
+    cbWndExtra: c_int = 0,
+    hInstance: HINSTANCE,
+    hIcon: ?HICON = null,
+    hCursor: ?HCURSOR = null,
+    hbrBackground: ?HBRUSH = null,
+    lpszMenuName: ?LPCSTR = null,
+    lpszClassName: LPCSTR,
+    hIconSm: ?HICON = null,
+};
+
+const WNDPROC = *const fn(unnamedParam1: HWND, unnamedParam2: UINT, unnamedParam3: WPARAM, unnamedParam4: LPARAM) callconv(win32.WINAPI) LRESULT;
+
+extern "user32" fn CreateWindowExA(dwExStyle: DWORD, lpClassName: ?LPCSTR, lpWindowName: ?LPCSTR, dwStyle: DWORD, X: i32, Y: i32, nWidth: i32, nHeight: i32, hWndParent: ?HWND, Menu: ?HMENU, hInstance: HINSTANCE, lpParam: ?LPVOID) HWND;
 extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
 extern "user32" fn LoadIconA(hInstance: ?HINSTANCE, lpIconName: u32) HICON;
 extern "user32" fn LoadCursorA(hInstance: ?HINSTANCE, lpCursorName: u32) HCURSOR;
 extern "user32" fn GetSystemMetrics(nIndex: i32) i32;
-extern "user32" fn InvalidateRect(hWnd: win32.HWND, lpRect: ?*win32.RECT, bErase: win32.BOOL) win32.BOOL;
+extern "user32" fn InvalidateRect(hWnd: HWND, lpRect: ?*win32.RECT, bErase: BOOL) BOOL;
+extern "user32" fn ShowWindow(hWnd: HWND, nCmdShow: i32) BOOL;
+extern "user32" fn DestroyWindow(hWnd: HWND) BOOL;
+extern "user32" fn GetMessageA(lpMsg: LPMSG, hWnd: ?HWND, wMsgFilterMin: UINT, wMsgFilterMax: UINT) BOOL;
+extern "user32" fn DefWindowProcA(hWnd: HWND, Msg: UINT, wParam: WPARAM, lParam: LPARAM) LRESULT;
+extern "user32" fn PeekMessageA(lpMsg: LPMSG, hWnd: ?HWND, wMsgFilterMin: UINT, wMsgFilterMax: UINT, wRemoveMsg: UINT) BOOL;
+extern "user32" fn TranslateMessage(lpMsg: LPMSG) BOOL;
+extern "user32" fn DispatchMessageA(lpMsg: LPMSG) BOOL;
+extern "user32" fn RegisterClassExA(unnamedParam1: *const WNDCLASSEXA) ATOM;
 
+const PM_NOREMOVE = 0;
+const PM_REMOVE = 1;
+const PM_NOYIELD = 2;
 
 extern "gdi32" fn CreateBitmap(width: i32, height: i32, nPlanes: u32, bitCount: u32, lpbits: *opaque {}) HGDIOBJ;
 extern "gdi32" fn CreateCompatibleDC(hdc: HDC) HDC;
@@ -73,30 +118,29 @@ pub const Window = struct {
         @memcpy(titleBuffer[0..options.title.len], options.title);
         titleBuffer[options.title.len] = 0;
 
-        var style: DWORD = user32.WS_OVERLAPPEDWINDOW;
+        var style: DWORD = WS_OVERLAPPEDWINDOW;
         var width: i32 = @intCast(options.width);
         var height: i32 = @intCast(options.height);
 
         if (options.fullscreen) {
-            style = user32.WS_POPUP;
+            style = WS_POPUP;
             width = GetSystemMetrics(SM_CXSCREEN);
             height = GetSystemMetrics(SM_CYSCREEN);
         }
 
-        if (user32.CreateWindowExA(0, // Optional window styles.
+        const hwnd = CreateWindowExA(0, // Optional window styles.
             className, // Window class
             @ptrCast(&titleBuffer), // Window text
             style, // Window style
 
         // Size and position
-            user32.CW_USEDEFAULT, user32.CW_USEDEFAULT, width, height, null, // Parent window
+            CW_USEDEFAULT, CW_USEDEFAULT, width, height, null, // Parent window
             null, // Menu
             hInstance, // Instance handle
             null // Additional application data
-        )) |hwnd| {
-            _ = user32.ShowWindow(hwnd, user32.SW_SHOW);
-            return Window{ .hwnd = hwnd };
-        } else unreachable;
+        );
+        _ = ShowWindow(hwnd, SW_SHOW);
+        return Window{ .hwnd = hwnd };
     }
 
     pub fn presentCanvasU32BGRA(w: *Window, width: u16, height: u16, data: []u32) void {
@@ -141,7 +185,7 @@ pub const Window = struct {
         if (self.bitmap) |hgdiobj| {
             _ = DeleteObject(hgdiobj);
         }
-        _ = user32.DestroyWindow(self.hwnd);
+        _ = DestroyWindow(self.hwnd);
     }
 
     pub fn invalidateRect(self: Window) void {
@@ -154,23 +198,35 @@ fn ensureStaticClassRegistered(hInstance: win32.HINSTANCE) void {
         return;
     }
     static_class_atom = registerWindowClass(hInstance, static_class_name, staticWindowProc);
+
     if (static_class_atom == 0) {
         unreachable; // failed to register
     }
 }
 
-fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, windowProc: user32.WNDPROC) ATOM {
-    var wc = user32.WNDCLASSEXA{ .style = user32.CS_HREDRAW | user32.CS_VREDRAW, .lpfnWndProc = windowProc, .hInstance = hInstance, .lpszClassName = className, .hIcon = LoadIconA(null, IDI_APPLICATION), .hCursor = LoadCursorA(null, IDC_ARROW), .hIconSm = null, .hbrBackground = null, .lpszMenuName = null };
+const CS_HREDRAW = 0x0002;
+const CS_VREDRAW = 0x0001;
 
-    const atom = user32.RegisterClassExA(&wc);
-    return atom;
+fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, windowProc: WNDPROC) ATOM {
+    
+    var wc = WNDCLASSEXA { 
+        .cbSize = @sizeOf(WNDCLASSEXA),
+        .style = CS_HREDRAW | CS_VREDRAW, 
+        .lpfnWndProc = windowProc, 
+        .hInstance = hInstance, 
+        .lpszClassName = className,
+    };
+    wc.hIcon = LoadIconA(null, IDI_APPLICATION);
+    wc.hCursor = LoadCursorA(null, IDC_ARROW);
+
+    return RegisterClassExA(&wc);
 }
 
 pub fn processMessagesUntilQuit() void {
-    var msg: user32.MSG = undefined;
-    while (user32.GetMessageA(&msg, null, 0, 0) > 0) {
-        _ = user32.TranslateMessage(&msg);
-        _ = user32.DispatchMessageA(&msg);
+    var msg: MSG = undefined;
+    while (GetMessageA(&msg, null, 0, 0) > 0) {
+        _ = TranslateMessage(&msg);
+        _ = DispatchMessageA(&msg);
     }
 }
 
@@ -207,8 +263,8 @@ inline fn getEventFromStaticQueue() ?EventData {
 
 /// get next message from thread's message queue
 pub fn getRawMessage() bool {
-    var msg: user32.MSG = undefined;
-    if (user32.GetMessageA(&msg, null, 0, 0) > 0) {
+    var msg: MSG = undefined;
+    if (GetMessageA(&msg, null, 0, 0) > 0) {
         handleMessage(&msg);
         return true;
     } else {
@@ -218,8 +274,8 @@ pub fn getRawMessage() bool {
 
 /// peek next message from thread's message queue
 pub fn peekRawMessage() bool {
-    var msg: user32.MSG = undefined;
-    if (user32.PeekMessageA(&msg, null, 0, 0, user32.PM_REMOVE) > 0) {
+    var msg: MSG = undefined;
+    if (PeekMessageA(&msg, null, 0, 0, PM_REMOVE) > 0) {
         handleMessage(&msg);
         return true;
     } else {
@@ -227,14 +283,15 @@ pub fn peekRawMessage() bool {
     }
 }
 
-fn handleMessage(msg: *user32.MSG) void {
-    _ = user32.TranslateMessage(msg);
-    _ = user32.DispatchMessageA(msg);
+fn handleMessage(msg: *MSG) void {
+    _ = TranslateMessage(msg);
+    _ = DispatchMessageA(msg);
 }
 
-fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) win32.LRESULT {
+
+fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) LRESULT {
     const event: EventData = switch (uMsg) {
-        user32.WM_KEYDOWN => EventData{ .keydown = switch (wParam) {
+        WM_KEYDOWN => EventData{ .keydown = switch (wParam) {
             VK_LEFT => .left,
             VK_RIGHT => .right,
             VK_UP => .up,
@@ -242,24 +299,24 @@ fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lP
             VK_ESCAPE => .escape,
             else => .unknown,
         } }, // TODO extend
-        user32.WM_PAINT => EventData{ .paint = undefined },
-        user32.WM_CLOSE => EventData{ .closewindow = undefined },
-        user32.WM_SIZE => EventData{ .resize = common.Size{
+        WM_PAINT => EventData{ .paint = undefined },
+        WM_CLOSE => EventData{ .closewindow = undefined },
+        WM_SIZE => EventData{ .resize = common.Size{
             .width = @intCast(lParam & 0xffff),
             .height = @intCast((lParam >> 16) & 0xffff),
         } },
-        user32.WM_MOUSEMOVE => EventData{ .pointermove = positionFromLparam(lParam)},
-        user32.WM_LBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
-        user32.WM_LBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
-        user32.WM_MBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
-        user32.WM_MBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
-        user32.WM_RBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
-        user32.WM_RBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
+        WM_MOUSEMOVE => EventData{ .pointermove = positionFromLparam(lParam)},
+        WM_LBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        WM_LBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
+        WM_MBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        WM_MBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
+        WM_RBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
+        WM_RBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
         else => EventData{ .unknown = undefined },
     };
     static_event_queue[static_event_queue_tail] = event;
     static_event_queue_tail = static_event_queue_tail +% 1;
-    return user32.DefWindowProcA(hwnd, uMsg, wParam, lParam);
+    return DefWindowProcA(hwnd, uMsg, wParam, lParam);
 }
 
 fn positionFromLparam(lparam: isize) common.Position {
@@ -268,6 +325,21 @@ fn positionFromLparam(lparam: isize) common.Position {
         .y = @intCast((lparam >> 16) & 0xffff),
     };
 }
+
+const WM_SIZE = 5;
+const WM_PAINT = 15;
+const WM_CLOSE = 16;
+const WM_KEYDOWN = 256;
+const WM_MOUSEMOVE = 512;
+const WM_LBUTTONDOWN = 513;
+const WM_LBUTTONUP = 514;
+const WM_LBUTTONDBLCLK = 515;
+const WM_RBUTTONDOWN = 516;
+const WM_RBUTTONUP = 517;
+const WM_RBUTTONDBLCLK = 518;
+const WM_MBUTTONDOWN = 519;
+const WM_MBUTTONUP = 520;
+const WM_MBUTTONDBLCLK  = 521;
 
 const VK_LBUTTON = 0x01; // 	Left mouse button
 const VK_RBUTTON = 0x02; // 	Right mouse button
@@ -443,3 +515,23 @@ const VK_ZOOM = 0xFB; // 	Zoom key
 const VK_NONAME = 0xFC; // 	Reserved
 const VK_PA1 = 0xFD; // 	PA1 key
 const VK_OEM_CLEAR = 0xFE; // 	Clear key
+
+const WS_POPUP = 0x80000000;
+const WS_OVERLAPPEDWINDOW = 0x00CF0000;
+
+const CW_USEDEFAULT = @as(i32, -0x80000000);
+
+const SW_HIDE = 0;
+const SW_SHOWNORMAL = 1;
+const SW_NORMAL = 1;
+const SW_SHOWMINIMIZED = 2;
+const SW_SHOWMAXIMIZED = 3;
+const SW_MAXIMIZE = 3;
+const SW_SHOWNOACTIVATE = 4;
+const SW_SHOW = 5;
+const SW_MINIMIZE = 6;
+const SW_SHOWMINNOACTIVE =7;
+const SW_SHOWNA = 8;
+const SW_RESTORE = 9;
+const SW_SHOWDEFAULT = 10;
+const SW_FORCEMINIMIZE = 11;

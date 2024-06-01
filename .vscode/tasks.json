@@ -16,21 +16,9 @@
             "problemMatcher": []
         },
         {
-            "label": "internalfont xcb",
-            "type": "shell",
-            "command": "clear && zig run internalfont.zig -lc -lxcb -lxcb-image",
-            "problemMatcher": []
-        },
-        {
-            "label": "rectangles xcb",
-            "type": "shell",
-            "command": "clear && zig run rectangles.zig -lc -lxcb -lxcb-image",
-            "problemMatcher": []
-        },
-        {
             "label": "rectangles wine",
             "type": "shell",
-            "command": "clear && zig build-exe rectangles.zig -target x86_64-windows && wine mainIntersection.exe && rm mainIntersection.exe mainIntersection.exe.obj mainIntersection.pdb",
+            "command": "clear && zig build-exe rectangles.zig -target x86_64-windows && wine rectangles.exe && rm rectangles.exe rectangles.exe.obj rectangles.pdb",
             "problemMatcher": []
         },
         {
@@ -40,15 +28,9 @@
             "problemMatcher": []
         },
         {
-            "label": "xortexture xcb",
-            "type": "shell",
-            "command": "clear && zig run xortexture.zig -lc -lxcb -lxcb-image",
-            "problemMatcher": []
-        },
-        {
             "label": "xortexture wine",
             "type": "shell",
-            "command": "clear && zig build-exe xortexture.zig -target x86_64-windows && wine window.exe && rm xortexture.exe xortexture.exe.obj xortexture.pdb",
+            "command": "clear && zig build-exe xortexture.zig -target x86_64-windows && wine xortexture.exe && rm xortexture.exe xortexture.exe.obj xortexture.pdb",
             "problemMatcher": []
         },
         {
@@ -58,21 +40,15 @@
             "problemMatcher": []
         },
         {
-            "label": "pathtracer xcb",
-            "type": "shell",
-            "command": "clear && zig run pathtracer.zig -lc -lxcb -lxcb-image",
-            "problemMatcher": []
-        },
-        {
-            "label": "2048 xcb",
-            "type": "shell",
-            "command": "clear && zig run 2048.zig -lc -lxcb -lxcb-image",
-            "problemMatcher": []
-        },
-        {
             "label": "2048",
             "type": "shell",
             "command": "clear && zig run 2048.zig -Drelease-fast",
+            "problemMatcher": []
+        },
+        {
+            "label": "2048 wine",
+            "type": "shell",
+            "command": "clear && zig build-exe 2048.zig -target x86_64-windows && wine 2048.exe && rm 2048.exe 2048.exe.obj 2048.pdb",
             "problemMatcher": []
         },
         {

@@ -562,7 +562,7 @@ pub const Connection = struct {
             .events = 1, // POLLIN
             .revents = 0,
         }};
-        return try std.os.poll(&nfo, 0) != 0;
+        return try std.posix.poll(&nfo, 0) != 0;
     }
 
     fn read(self: Connection, buffer: anytype) !void {
@@ -855,7 +855,7 @@ const Display = struct {
 };
 
 fn getDisplayServerInfo() !Display {
-    if (std.os.getenv("DISPLAY")) |display| {
+    if (std.posix.getenv("DISPLAY")) |display| {
         return parseDisplay(display);
     }
     return Err.DisplayNotFound;
