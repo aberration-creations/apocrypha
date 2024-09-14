@@ -9,26 +9,21 @@ pub const Event = enum {
     paint,
     closewindow,
     keydown,
+    keyup,
     resize,
     pointermove,
     pointerdown,
     pointerup,
 };
 
-pub const Key = enum {
-    unknown,
-    escape,
-    up,
-    left,
-    down,
-    right
-};
+pub const Key = enum { unknown, escape, up, left, down, right };
 
 pub const EventData = union(Event) {
     unknown: void,
     paint: void,
     closewindow: void,
     keydown: Key,
+    keyup: Key,
     resize: Size,
     pointermove: Position,
     pointerdown: Position,
@@ -54,6 +49,4 @@ pub const WindowCreateOptions = struct {
     fullscreen: bool = false,
 };
 
-pub const InvalidateRectOptions = struct {
-
-};
+pub const InvalidateRectOptions = struct {};

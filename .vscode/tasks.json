@@ -4,6 +4,12 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "controls",
+            "type": "shell",
+            "command": "clear && zig run controls.zig",
+            "problemMatcher": [],
+        },
+        {
             "label": "internalfont",
             "type": "shell",
             "command": "clear && zig run internalfont.zig",
