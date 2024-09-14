@@ -36,7 +36,7 @@
         {
             "label": "pathtracer",
             "type": "shell",
-            "command": "clear && zig run pathtracer.zig -Drelease-fast -- --threads 60",
+            "command": "clear && zig run pathtracer.zig -Drelease-fast -- --samples 10",
             "problemMatcher": []
         },
         {
