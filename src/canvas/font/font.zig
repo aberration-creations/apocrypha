@@ -22,7 +22,7 @@ pub fn initInternalFont(allocator: std.mem.Allocator) Font {
 /// > use drawTextV2, for better experience
 ///
 pub fn drawTextV1(canvas: *Canvas(u32), font: *Font, size: usize, color: u32, x: usize, y: usize, string: []const u8) !void {
-    const cursorX = x;
+    var cursorX = x;
     const cursorY = y;
     // TODO optimize when colorAlpha == 255 or 0
     const colorAlpha = color32bgra.getAlpha(color);
