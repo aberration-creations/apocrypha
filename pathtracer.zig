@@ -8,7 +8,7 @@ const Configuration = struct {
 };
 
 var cfg = Configuration {};
-var rand = std.rand.DefaultPrng.init(0);
+var rand = std.Random.DefaultPrng.init(0);
 var is_rendering = true;
 var last_present: i64 = 0;
 const starting_k = 64;

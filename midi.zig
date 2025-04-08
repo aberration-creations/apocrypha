@@ -1,10 +1,10 @@
 const std = @import("std");
 const as = @cImport(
-    @cInclude("alsa/asoundlib.h")
+    @cInclude("alsa/asoundlib.h") // -lasound
 );
 const xc = @cImport({
-    @cInclude("xcb/xcb.h"); // sudo apt install libxcb1-dev
-    @cInclude("xcb/xtest.h"); // sudo apt install libxcb-xtest0-dev
+    @cInclude("xcb/xcb.h"); // -lc -lxcb -lxcb-image (sudo apt install libxcb1-dev)
+    @cInclude("xcb/xtest.h"); // -lxcb-xtest (sudo apt install libxcb-xtest0-dev)
 });
 
 var seq_handle: ?*as.snd_seq_t = null;
@@ -81,7 +81,7 @@ fn mapNoteToKey(note: u8) ?u8 {
     if (note < 48) {
         return null;
     }
-    var i = note - 48;
+    const i = note - 48;
     if (i >= keymap.len) {
         return null;
     }

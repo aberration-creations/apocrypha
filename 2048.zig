@@ -1,6 +1,6 @@
 const std = @import("std");
 const ui = @import("./src/index.zig");
-var rand = std.rand.DefaultPrng.init(0);
+var rand = std.Random.DefaultPrng.init(0);
 
 const Cell = struct {
     value: u16 = 0,

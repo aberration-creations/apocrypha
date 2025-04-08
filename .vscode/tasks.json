@@ -69,5 +69,11 @@
             "command": "clear && zig test src/window/adapters/rx11.zig && zig run rx11.zig",
             "problemMatcher": "$zig"
         },
+        {
+            "label": "midi",
+            "type": "shell",
+            "command": "clear && zig run midi.zig -lc -lxcb -lxcb-image -lxcb-xtest -lasound",
+            "problemMatcher": "$zig"
+        }
     ]
 }

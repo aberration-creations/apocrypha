@@ -34,7 +34,7 @@ pub fn main() !void {
         // while (try x11.hasInput(conn)) {
         // } 
         std.debug.print("hello\n", .{});
-        try x11.readInput(conn, input[0..64]);
+        _ = try x11.readInput(conn, input[0..64]);
         try x11.createGC(conn, foreground, win, x11.GCBitmaskValues.foreground, &[1]u32{ 0xff00ff });   
         try x11.polyFillRectangle(conn, win, foreground, 0, 0, 9999, 9999);
         try x11.freeGC(conn, foreground);

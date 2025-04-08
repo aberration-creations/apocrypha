@@ -57,7 +57,7 @@ pub fn main() !void {
         };
 
         const time: u32 = @intCast((std.time.milliTimestamp() >> 4) & 0xffffffff);
-        var prng = std.rand.DefaultPrng.init(0);
+        var prng = std.Random.DefaultPrng.init(0);
         canvas.clear(black);
         for (0..14) |x| 
         {

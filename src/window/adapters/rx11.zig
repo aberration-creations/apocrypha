@@ -1,5 +1,5 @@
 const std = @import("std");
-const protocol = @import("./protocols/x11.zig");
+pub const protocol = @import("./protocols/x11.zig");
 const common = @import("./common.zig");
 
 pub const WindowOptions = common.WindowCreateOptions;
