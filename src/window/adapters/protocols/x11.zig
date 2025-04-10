@@ -1059,7 +1059,7 @@ pub const Event = extern struct {
     }
 
     const KeyPress = extern struct { 
-        code: EventCode = 2,       //      1     2                               code
+        code: EventCode = .KeyPress,       //      1     2                               code
         detail: u8,     //      1     KEYCODE                         detail
         number: u16,  //      2     CARD16                          sequence number
         time: u32,     //      4     TIMESTAMP                       time

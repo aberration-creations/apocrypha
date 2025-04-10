@@ -14,7 +14,7 @@ var window: ui.Window = undefined;
 var canvas: ui.Canvas32 = undefined;
 var danvas: ui.Canvas32 = undefined;
 var font: ui.Font = undefined;
-var game: [4][4]Cell = .{.{.{}} ** 4} ** 4;
+var game: [4][4]Cell = undefined;
 var is_animating = false;
 var last_render_ms: i64 = 0;
 var score: usize = 0;
@@ -301,8 +301,8 @@ fn render() !void {
 fn addRandomValue() void {
     for (0..100) |i| {
         _ = i;
-        const rx = rand.next() % 4;
-        const ry = rand.next() % 4;
+        const rx: usize = @intCast(rand.next() % 4);
+        const ry: usize = @intCast(rand.next() % 4);
         if (game[rx][ry].value == 0) {
             var value: u16 = 2;
             if (rand.next() % 6 == 0) {
