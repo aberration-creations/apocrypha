@@ -28,7 +28,7 @@ pub fn main() !void {
         const deinit_status = gpa.deinit();
         if (deinit_status == .leak) @panic("MEMORY LEAK");
     }
-    
+
     canvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
     danvas = try ui.Canvas32.initAlloc(allocator, 512, 512);
     defer canvas.deinit();
@@ -42,7 +42,7 @@ pub fn main() !void {
     defer window.deinit();
 
     font = ui.loadInternalFont(allocator);
-    defer font.deinit();
+    defer font.deinit(allocator);
 
     addRandomValue();
     addRandomValue();
@@ -51,7 +51,7 @@ pub fn main() !void {
         while (ui.nextEvent(.{ .blocking = !is_animating })) |evt| {
             switch (evt) {
                 .paint => {
-                    try render();
+                    try render(allocator);
                 },
                 .keydown => |key| switch (key) {
                     .escape => return,
@@ -70,8 +70,8 @@ pub fn main() !void {
             }
         }
         if (is_animating) {
-            try render();
-            std.time.sleep(1);
+            try render(allocator);
+            std.Thread.sleep(1);
         }
     }
 }
@@ -173,7 +173,7 @@ fn moveCell(x: usize, y: usize, dx: i32, dy: i32) struct { moved: bool, score: u
     }
 }
 
-fn render() !void {
+fn render(allocator: std.mem.Allocator) !void {
     const now = std.time.milliTimestamp();
     var dt: f32 = 0;
     if (is_animating) {
@@ -273,7 +273,7 @@ fn render() !void {
                 canvas.rect(x0 + s, y0 + s, x1 - s, y1 - s, bg_color);
                 const str = try std.fmt.bufPrint(&buffer, "{}", .{cell.value});
                 const font_color = ui.color32bgra.mixColor32bgraByFloat(0x00ffffff, white, cell_t * 2);
-                try ui.drawCenteredTextSpan(&canvas, &font, 24, font_color, @intCast(x0), @intCast(y0), @intCast(x1), @intCast(y1), str);
+                try ui.drawCenteredTextSpan(&canvas, allocator, &font, 24, font_color, @intCast(x0), @intCast(y0), @intCast(x1), @intCast(y1), str);
             }
         }
     }
@@ -281,7 +281,7 @@ fn render() !void {
     const str = try std.fmt.bufPrint(&buffer, "score {}", .{score});
     const score_x0: i16 = @intCast(margin_x);
     const score_y0: i16 = @intCast(margin_y - 48);
-    try ui.drawTextV2(&canvas, &font, 24, white, score_x0, score_y0, str);
+    try ui.drawTextV2(&canvas, allocator, &font, 24, white, score_x0, score_y0, str);
 
     if (score_delta_t > 1) {
         score_delta_t = 1;
@@ -293,7 +293,7 @@ fn render() !void {
     const anim_color = ui.color32bgra.mixColor32bgraByFloat(0xf080c020, 0x00ff00, score_delta_t);
     const anim_sx = score_x0 + @as(i16, @intCast(str.len * 20));
     const anim_sy = score_y0 + @as(i16, @intFromFloat(score_delta_t * score_delta_t * -50));
-    try ui.drawTextV2(&canvas, &font, 24, anim_color, anim_sx, anim_sy, str2);
+    try ui.drawTextV2(&canvas, allocator, &font, 24, anim_color, anim_sx, anim_sy, str2);
 
     ui.presentWithDeltaCanvas32(window, canvas, &danvas);
 }

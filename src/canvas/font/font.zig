@@ -50,12 +50,12 @@ pub fn drawTextV1(canvas: *Canvas(u32), font: *Font, size: usize, color: u32, x:
 }
 
 /// Draws text to canvas, it may allocate to cache additional font bitmaps
-pub fn drawTextV2(dst: *Canvas(u32), font: *Font, size: usize, color: u32, x: i16, y: i16, string: []const u8) !void {
+pub fn drawTextV2(dst: *Canvas(u32), allocator: std.mem.Allocator, font: *Font, size: usize, color: u32, x: i16, y: i16, string: []const u8) !void {
     var cursorX = x;
     const cursorY = y;
     // TODO optimize when colorAlpha == 255 or 0
     const colorAlpha = color32bgra.getAlpha(color);
-    var scaleset = try font.getOrAllocSizeCache(size);
+    var scaleset = try font.getOrAllocSizeCache(allocator, size);
 
     if (cursorY > dst.height) {
         return; // first char start below canvas, drop all
@@ -131,9 +131,9 @@ pub fn drawTextV2(dst: *Canvas(u32), font: *Font, size: usize, color: u32, x: i1
     }
 }
 
-pub fn measureTextSpanWidth(font: *Font, size: i16, string: []const u8) !i16 {
+pub fn measureTextSpanWidth(font: *Font, allocator: std.mem.Allocator, size: i16, string: []const u8) !i16 {
     var width: usize = 0;
-    var scaleset = try font.getOrAllocSizeCache(@intCast(size));
+    var scaleset = try font.getOrAllocSizeCache(allocator, @intCast(size));
     for (string) |code| {
         if (try scaleset.lazyGetGlyph(code)) |glyph| {
             width += glyph.data.width;
@@ -142,14 +142,14 @@ pub fn measureTextSpanWidth(font: *Font, size: i16, string: []const u8) !i16 {
     return @intCast(width);
 }
 
-pub fn drawCenteredTextSpan(dst: *Canvas(u32), font: *Font, size: i16, color: u32, x0: i16, y0: i16, x1: i16, y1: i16, string: []const u8) !void {
-    const measured_width = try measureTextSpanWidth(font, size, string);
+pub fn drawCenteredTextSpan(dst: *Canvas(u32), allocator: std.mem.Allocator, font: *Font, size: i16, color: u32, x0: i16, y0: i16, x1: i16, y1: i16, string: []const u8) !void {
+    const measured_width = try measureTextSpanWidth(font, allocator, size, string);
     const width = x1 - x0;
     const height = y1 - y0;
-    const scaleset = try font.getOrAllocSizeCache(@intCast(size));
+    const scaleset = try font.getOrAllocSizeCache(allocator, @intCast(size));
     const aligned_x = x0 + @divTrunc(width - measured_width, 2);
     const aligned_y = y0 + @divTrunc(height + scaleset.capheight, 2) - scaleset.baseline;
-    try drawTextV2(dst, font, @intCast(size), color, aligned_x, aligned_y, string);
+    try drawTextV2(dst, allocator, font, @intCast(size), color, aligned_x, aligned_y, string);
 }
 
 pub const FontDataChunk = struct {
@@ -200,26 +200,26 @@ pub const Font = struct {
         return Font{
             .allocator = allocator,
             .source = bitmap,
-            .sizeSets = std.ArrayList(FontSizeCacheMap).init(allocator),
+            .sizeSets = std.ArrayList(FontSizeCacheMap).empty,
         };
     }
 
-    fn getOrAllocSizeCache(font: *Font, size: usize) !*FontSizeCacheMap {
+    fn getOrAllocSizeCache(font: *Font, allocator: std.mem.Allocator, size: usize) !*FontSizeCacheMap {
         for (0..font.sizeSets.items.len) |i| {
             if (font.sizeSets.items[i].size == size) {
                 return &font.sizeSets.items[i];
             }
         }
         const item = FontSizeCacheMap.init(font, size);
-        try font.sizeSets.append(item);
+        try font.sizeSets.append(allocator, item);
         return &font.sizeSets.items[font.sizeSets.items.len - 1];
     }
 
-    pub fn deinit(font: *Font) void {
+    pub fn deinit(font: *Font, allocator: std.mem.Allocator) void {
         for (0..font.sizeSets.items.len) |i| {
             font.sizeSets.items[i].deinit();
         }
-        font.sizeSets.deinit();
+        font.sizeSets.deinit(allocator);
     }
 };
 
