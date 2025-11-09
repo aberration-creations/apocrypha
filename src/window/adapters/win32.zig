@@ -61,7 +61,7 @@ const WNDCLASSEXA = extern struct {
     hIconSm: ?HICON = null,
 };
 
-const WNDPROC = *const fn(unnamedParam1: HWND, unnamedParam2: UINT, unnamedParam3: WPARAM, unnamedParam4: LPARAM) callconv(win32.WINAPI) LRESULT;
+const WNDPROC = *const fn (unnamedParam1: HWND, unnamedParam2: UINT, unnamedParam3: WPARAM, unnamedParam4: LPARAM) callconv(.winapi) LRESULT;
 
 extern "user32" fn CreateWindowExA(dwExStyle: DWORD, lpClassName: ?LPCSTR, lpWindowName: ?LPCSTR, dwStyle: DWORD, X: i32, Y: i32, nWidth: i32, nHeight: i32, hWndParent: ?HWND, Menu: ?HMENU, hInstance: HINSTANCE, lpParam: ?LPVOID) HWND;
 extern "user32" fn GetModuleHandleA(?[*]const u8) HINSTANCE;
@@ -133,7 +133,7 @@ pub const Window = struct {
             @ptrCast(&titleBuffer), // Window text
             style, // Window style
 
-        // Size and position
+            // Size and position
             CW_USEDEFAULT, CW_USEDEFAULT, width, height, null, // Parent window
             null, // Menu
             hInstance, // Instance handle
@@ -208,12 +208,11 @@ const CS_HREDRAW = 0x0002;
 const CS_VREDRAW = 0x0001;
 
 fn registerWindowClass(hInstance: win32.HINSTANCE, className: [*:0]const u8, windowProc: WNDPROC) ATOM {
-    
-    var wc = WNDCLASSEXA { 
+    var wc = WNDCLASSEXA{
         .cbSize = @sizeOf(WNDCLASSEXA),
-        .style = CS_HREDRAW | CS_VREDRAW, 
-        .lpfnWndProc = windowProc, 
-        .hInstance = hInstance, 
+        .style = CS_HREDRAW | CS_VREDRAW,
+        .lpfnWndProc = windowProc,
+        .hInstance = hInstance,
         .lpszClassName = className,
     };
     wc.hIcon = LoadIconA(null, IDI_APPLICATION);
@@ -288,8 +287,7 @@ fn handleMessage(msg: *MSG) void {
     _ = DispatchMessageA(msg);
 }
 
-
-fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(win32.WINAPI) LRESULT {
+fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lParam: win32.LPARAM) callconv(.winapi) LRESULT {
     const event: EventData = switch (uMsg) {
         WM_KEYDOWN => EventData{ .keydown = switch (wParam) {
             VK_LEFT => .left,
@@ -305,7 +303,7 @@ fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lP
             .width = @intCast(lParam & 0xffff),
             .height = @intCast((lParam >> 16) & 0xffff),
         } },
-        WM_MOUSEMOVE => EventData{ .pointermove = positionFromLparam(lParam)},
+        WM_MOUSEMOVE => EventData{ .pointermove = positionFromLparam(lParam) },
         WM_LBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
         WM_LBUTTONUP => EventData{ .pointerup = positionFromLparam(lParam) },
         WM_MBUTTONDOWN => EventData{ .pointerdown = positionFromLparam(lParam) },
@@ -320,7 +318,7 @@ fn staticWindowProc(hwnd: win32.HWND, uMsg: win32.UINT, wParam: win32.WPARAM, lP
 }
 
 fn positionFromLparam(lparam: isize) common.Position {
-    return common.Position {
+    return common.Position{
         .x = @intCast(lparam & 0xffff),
         .y = @intCast((lparam >> 16) & 0xffff),
     };
@@ -339,7 +337,7 @@ const WM_RBUTTONUP = 517;
 const WM_RBUTTONDBLCLK = 518;
 const WM_MBUTTONDOWN = 519;
 const WM_MBUTTONUP = 520;
-const WM_MBUTTONDBLCLK  = 521;
+const WM_MBUTTONDBLCLK = 521;
 
 const VK_LBUTTON = 0x01; // Left mouse button
 const VK_RBUTTON = 0x02; // Right mouse button
@@ -530,7 +528,7 @@ const SW_MAXIMIZE = 3;
 const SW_SHOWNOACTIVATE = 4;
 const SW_SHOW = 5;
 const SW_MINIMIZE = 6;
-const SW_SHOWMINNOACTIVE =7;
+const SW_SHOWMINNOACTIVE = 7;
 const SW_SHOWNA = 8;
 const SW_RESTORE = 9;
 const SW_SHOWDEFAULT = 10;
