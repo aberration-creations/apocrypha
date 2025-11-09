@@ -10,9 +10,21 @@
             "problemMatcher": [],
         },
         {
+            "label": "controls wine",
+            "type": "shell",
+            "command": "clear && zig build-exe controls.zig -target x86_64-windows && wine controls.exe && rm controls.exe controls.exe.obj controls.pdb",
+            "problemMatcher": [],
+        },
+        {
             "label": "internalfont",
             "type": "shell",
             "command": "clear && zig run internalfont.zig",
+            "problemMatcher": []
+        },
+        {
+            "label": "internalfont wine",
+            "type": "shell",
+            "command": "clear && zig build-exe internalfont.zig -target x86_64-windows && wine internalfont.exe && rm internalfont.exe internalfont.exe.obj internalfont.pdb",
             "problemMatcher": []
         },
         {
@@ -43,6 +55,12 @@
             "label": "pathtracer",
             "type": "shell",
             "command": "clear && zig run pathtracer.zig -Drelease-fast -- --samples 10",
+            "problemMatcher": []
+        },
+        {
+            "label": "pathtracer wine",
+            "type": "shell",
+            "command": "clear && zig build-exe pathtracer.zig -target x86_64-windows -Drelease-fast && wine pathtracer.exe --samples 10 && rm pathtracer.exe pathreacer.exe.obj pathtracer.pdb",
             "problemMatcher": []
         },
         {

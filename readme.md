@@ -11,12 +11,23 @@ as you wish with the canvas:
 
 To use import public functions from [`src/index.zig`](src/index.zig)
 
+Tested and confirmed working with zig 0.15.2
+
 Examples can be found at top level.
- - to run on windows `zig run 2048.zig`
- - to run on linux `zig run 2048.zig -lc -lxcb -lxcb-image`
+ - to run just `zig run 2048.zig`
 
 Examples can be run with [`.vscode/tasks.json`](.vscode/tasks.json)
 
-On linux the following need to be installed for the x11 integration to work:
+Some of the linux examples need linking with various xcb libraries.
+
+    zig run 2048.zig -lc -lxcb -lxcb-image
+
+On linux the following need to be installed for the xcb integration to work:
+
+Ubuntu/Debian
 
     sudo apt install libxcb1-dev libxcb-image0-dev
+
+Fedora
+
+    sudo dfn insatll libxcb-devel xcb-util-image-devel

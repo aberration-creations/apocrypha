@@ -4,8 +4,20 @@ const std = @import("std");
 const builtin = @import("builtin");
 const common = @import("./adapters/common.zig");
 
-const subsystem = builtin.target.os.tag;
-const userx11 = true;
+const WindowManagerIntegration = enum {
+    win32,
+    rx11,
+    xcb,
+};
+
+// define wether to use xcb integration
+const useXcb = true;
+
+const wmi: WindowManagerIntegration = switch (builtin.target.os.tag) {
+    .windows => .win32,
+    .linux => if (useXcb) .xcb else .rx11,
+    else => @compileError("window system not supported"),
+};
 
 pub const NextEventOptions = common.NextEventOptions;
 pub const Event = common.Event;
@@ -44,128 +56,99 @@ pub const Window = struct {
         if (handle >= maxWindowCount) {
             unreachable;
         }
-        switch (subsystem) {
-            .windows => win32W[handle] = win32.Window.init(options),
-            .linux => {
-                if (userx11){
-                    if (!rx11C_connected) {
-                        rx11C = rx11.Connection.init() catch @panic("");
-                        rx11C_connected = true;
-                    }
-                    rx11W[handle] = rx11.Window.init(&rx11C, options) catch @panic("window creation failed");
+        switch (wmi) {
+            .rx11 => {
+                if (!rx11C_connected) {
+                    rx11C = rx11.Connection.init() catch @panic("");
+                    rx11C_connected = true;
                 }
-                else {
-                    if (!x11C_connected) {
-                        x11C = xcb.X11Connection.init();
-                        x11C_connected = true;
-                    }
-                    x11W[handle] = xcb.X11Window.init(&x11C, options);
-                }
+                rx11W[handle] = rx11.Window.init(&rx11C, options) catch @panic("window creation failed");
             },
-            else => @compileError("not supported"),
+            .xcb => {
+                if (!x11C_connected) {
+                    x11C = xcb.X11Connection.init();
+                    x11C_connected = true;
+                }
+                x11W[handle] = xcb.X11Window.init(&x11C, options);
+            },
+            .win32 => win32W[handle] = win32.Window.init(options),
         }
         window_count += 1;
         return Window{ .handle = handle };
     }
 
     pub fn deinit(self: Self) void {
-        switch (subsystem) {
-            .windows => win32W[self.handle].deinit(),
-            .linux => {
-                if (userx11) {
-                    if (rx11W[self.handle].deinit()) |_| {} else |_| {
-                        @panic("");
-                    }
-                    window_count -= 1;
-                    if (window_count == 0) {
-                        if (rx11C_connected) {
-                            rx11C.deinit();
-                            rx11C_connected = false;
-                        }
-                    }
+        switch (wmi) {
+            .rx11 => {
+                if (rx11W[self.handle].deinit()) |_| {} else |_| {
+                    @panic("");
                 }
-                else {
-                    x11W[self.handle].deinit();
-                    window_count -= 1;
-                    if (window_count == 0) {
-                        if (x11C_connected) {
-                            x11C.deinit();
-                            x11C_connected = false;
-                        }
+                window_count -= 1;
+                if (window_count == 0) {
+                    if (rx11C_connected) {
+                        rx11C.deinit();
+                        rx11C_connected = false;
                     }
                 }
             },
-            else => @compileError("not supported"),
+            .xcb => {
+                x11W[self.handle].deinit();
+                window_count -= 1;
+                if (window_count == 0) {
+                    if (x11C_connected) {
+                        x11C.deinit();
+                        x11C_connected = false;
+                    }
+                }
+            },
+            .win32 => win32W[self.handle].deinit(),
         }
     }
 
     pub fn presentCanvasU32BGRA(self: Self, width: u16, height: u16, data: []u32) void {
-        switch (subsystem) {
-            .linux => {
-                if (userx11) {
-                    rx11W[self.handle].presentCanvasU32BGRA(width, height, data) catch @panic("failed");
-                }
-                else {
-                    x11W[self.handle].presentCanvasU32BGRA(width, height, data);
-                }
-            },
-            .windows => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
-            else => @compileError("not supported"),
+        switch (wmi) {
+            .rx11 => rx11W[self.handle].presentCanvasU32BGRA(width, height, data) catch @panic("presentCanvasU32BGRA failed"),
+            .xcb => x11W[self.handle].presentCanvasU32BGRA(width, height, data),
+            .win32 => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
         }
     }
 
     pub fn presentCanvasWithDeltaU32BGRA(self: Self, width: u16, height: u16, data: []u32, delta: *[]u32) void {
-        switch (subsystem) {
-            .linux => {
-                if (userx11) {
-                    rx11W[self.handle].presentCanvasWithDeltaU32BGRA(width, height, data, delta) catch @panic("failed");
-                }
-                else {
-                    // use fallback
-                    x11W[self.handle].presentCanvasU32BGRA(width, height, data);
-                }
-            },
-            // use fallback
-            .windows => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
-            else => @compileError("not supported"),
+        switch (wmi) {
+            .rx11 => rx11W[self.handle].presentCanvasWithDeltaU32BGRA(width, height, data, delta) catch @panic("presentCanvasWithDeltaU32BGRA failed"),
+            .xcb => x11W[self.handle].presentCanvasU32BGRA(width, height, data),
+            .win32 => win32W[self.handle].presentCanvasU32BGRA(width, height, data),
         }
     }
 
     pub fn requestRepaint(self: Self, opt: common.InvalidateRectOptions) void {
         _ = opt;
-        switch (subsystem) {
-            .windows => win32W[self.handle].invalidateRect(),
-            .linux => if (userx11) {
-                rx11_has_invalidated_rect = true;
-            } else {
-                @compileError("not supported");
-            },
-            else => @compileError("not supported"),
+        switch (wmi) {
+            .rx11 => rx11_has_invalidated_rect = true,
+            .xcb => @compileError("not supported"),
+            .win32 => win32W[self.handle].invalidateRect(),
         }
     }
-
 };
 
 /// waits for the next UI event
 /// expected to be called only from main 'GUI' thread
 pub fn nextEvent(options: NextEventOptions) ?EventData {
-    return switch (subsystem) {
-        .windows => win32.nextEvent(options),
-        .linux => if (userx11) {
+    return switch (wmi) {
+        .rx11 => {
             const blocking = options.blocking and !rx11_has_invalidated_rect;
             if (!blocking and !(rx11C.hasInput() catch @panic("event handling failed"))) {
                 if (rx11_has_invalidated_rect) {
                     rx11_has_invalidated_rect = false;
                     // TODO: emit event per window
-                    return EventData { .paint = undefined };
+                    return EventData{ .paint = undefined };
                 } else {
                     return null;
                 }
             }
             return rx11C.readInput() catch @panic("event read failed");
-        } else {
-            return x11C.nextEvent(options);
         },
-        else => @compileError("not supported"),
+        .xcb => x11C.nextEvent(options),
+        .win32 => win32.nextEvent(options),
     };
 }
