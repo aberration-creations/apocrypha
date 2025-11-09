@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const EventHandler = *const fn() void;
+pub const EventHandler = *const fn () void;
 
 pub const ElementStyle = struct {
     color: u32 = 0,
@@ -38,7 +38,7 @@ pub const Element = struct {
     onclick: ?EventHandler = null,
 
     pub fn init(data: ElementInit) !Element {
-        var result = Element {
+        var result = Element{
             .id = data.id,
             .x = data.x,
             .y = data.y,
@@ -52,14 +52,13 @@ pub const Element = struct {
         if (data.allocator) |allocator| {
             result.allocator = allocator;
             if (data.children) |children| {
-                var list = std.ArrayList(Element).init(allocator);
+                var list: std.ArrayList(Element) = .{};
                 for (children) |child| {
-                    try list.append(try Element.init(child));
+                    try list.append(allocator, try Element.init(child));
                 }
                 result.children = list;
             }
-        }
-        else {
+        } else {
             if (data.children) |_| {
                 @panic("cannot build children without allocator!");
             }
@@ -74,12 +73,10 @@ pub const Element = struct {
             }
             if (self.children) |*list| {
                 try list.append(try Element.init(data));
-            }
-            else {
+            } else {
                 @panic("failed to init children list");
             }
-        }
-        else {
+        } else {
             @panic("cannot add children without having an allocator");
         }
     }
@@ -106,8 +103,8 @@ pub const Element = struct {
         if (self.hidden) {
             return; // hidden elements cannot be clicked
         }
-        if (self.x <= x and x < self.x+self.w and 
-            self.y <= y and y < self.y+self.h)
+        if (self.x <= x and x < self.x + self.w and
+            self.y <= y and y < self.y + self.h)
         {
             const local_x = x - self.x;
             const local_y = y - self.y;
@@ -161,5 +158,4 @@ pub const Element = struct {
         }
         @panic("Element not found!");
     }
-
 };
