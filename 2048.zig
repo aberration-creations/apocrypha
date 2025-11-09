@@ -44,8 +44,7 @@ pub fn main() !void {
     font = ui.loadInternalFont(allocator);
     defer font.deinit();
 
-    addRandomValue();
-    addRandomValue();
+    resetGame();
 
     while (true) {
         while (ui.nextEvent(.{ .blocking = !is_animating })) |evt| {
@@ -74,6 +73,16 @@ pub fn main() !void {
             std.Thread.sleep(1);
         }
     }
+}
+
+fn resetGame() void {
+    for (0..4) |x| {
+        for (0..4) |y| {
+            game[x][y] = Cell{};
+        }
+    }
+    addRandomValue();
+    addRandomValue();
 }
 
 fn move(dir_x: i32, dir_y: i32) !void {
