@@ -11,7 +11,7 @@ const WindowManagerIntegration = enum {
 };
 
 // define wether to use xcb integration
-const useXcb = true;
+const useXcb = false;
 
 const wmi: WindowManagerIntegration = switch (builtin.target.os.tag) {
     .windows => .win32,
