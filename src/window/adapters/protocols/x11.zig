@@ -464,8 +464,7 @@ pub const Connection = struct {
     }
 
     fn setupConnection(self: *Connection) !void {
-        try self.writeStruct(ConnectionSetupRequest.init());
-
+        try self.sendConnectionSetupRequest();
         var status: ConnectionSetupReplyStatus = undefined;
         try self.read(&status);
 
@@ -499,7 +498,7 @@ pub const Connection = struct {
         _ = try self.read(&additional);
 
         // TODO for now we just ignore the rest of the reply
-        var buf: [65536]u8 = undefined;
+        var buf: [65536]u8 align(4) = undefined;
         const rest_size: usize = (status.additional_data_length_4bytes) * 4 - @sizeOf(SuccessfulConnectionHeaderAdditional);
         const bytes_Read = try self.stream.read(buf[0..rest_size]);
 
@@ -520,15 +519,50 @@ pub const Connection = struct {
         const screens_offset = formats_offset + formats_len;
         const screens_buf = buf[screens_offset..buf.len];
 
-        const screen: *Screen = @ptrCast(@alignCast(screens_buf.ptr));
+        var screens: []Screen = undefined;
+        screens.ptr = @ptrCast(@alignCast(screens_buf.ptr));
+        screens.len = additional.number_of_FORMATs_in_pixmap_formats;
 
-        self.first_screen_id = screen.root;
-        self.first_screen = screen.*;
+        self.first_screen_id = screens[0].root;
+        self.first_screen = screens[0];
 
         // std.debug.print(" {} \n", .{ additional });
         // std.debug.print("base {x} mask {x} \n", .{  additional.resource_id_base, additional.resource_id_mask });
         self.id_generator.base = additional.resource_id_base;
         self.id_generator.mask = additional.resource_id_mask;
+    }
+
+    fn sendConnectionSetupRequest(self: *Connection) !void {
+        var readbuf: [16000]u8 = undefined;
+        const xauthpath = getXAuthortyPath();
+        var authItems = XAuthItemParser{};
+        if (xauthpath.path.len > 0) {
+            const file = std.fs.openFileAbsolute(xauthpath.path, .{ .mode = .read_only });
+            if (file) |f| {
+                defer f.close();
+                const readsize = try f.readAll(&readbuf);
+                const content = readbuf[0..readsize];
+                authItems = XAuthItemParser.init(content);
+            } else |err| {
+                if (err == std.fs.File.OpenError.FileNotFound) {
+                    // ignore if file did not exist
+                } else {
+                    return err;
+                }
+            }
+        }
+        var header = ConnectionSetupRequest.init();
+        var name: []const u8 = "";
+        var data: []const u8 = "";
+        if (authItems.nextItem()) |item| {
+            name = item.authName;
+            data = item.authData;
+        }
+        header.auth_protocol_name_len = @intCast(name.len);
+        header.auth_protocol_data_len = @intCast(data.len);
+        try self.writeStruct(header);
+        try self.writeU8andPad(name);
+        try self.writeU8andPad(data);
     }
 
     fn writeStruct(self: Connection, data: anytype) !void {
@@ -553,6 +587,7 @@ pub const Connection = struct {
     }
 
     fn writeU8andPad(self: Connection, data: []const u8) !void {
+        if (data.len == 0) return;
         const written = try self.stream.write(data);
         if (data.len != written) return Err.ProtocolWriteError;
         const pad_to_write = pad4of(data.len);
@@ -864,6 +899,20 @@ fn getDisplayServerInfo() !Display {
         return parseDisplay(display);
     }
     return Err.DisplayNotFound;
+}
+
+const XAuthPath = struct {
+    path: []const u8 = "",
+    isFromEnv: bool = false,
+};
+
+fn getXAuthortyPath() XAuthPath {
+    if (std.posix.getenv("XAUTHORITY")) |path| {
+        if (path.len > 0) {
+            return .{ .path = path, .isFromEnv = true };
+        }
+    }
+    return .{ .path = "~/.Xauthority", .isFromEnv = true };
 }
 
 fn parseDisplay(str: []const u8) !Display {
@@ -1719,7 +1768,7 @@ pub const Event = extern struct {
 };
 
 const XAuthItemParser = struct {
-    buffer: []const u8,
+    buffer: []const u8 = "",
 
     pub fn init(binary: []const u8) XAuthItemParser {
         return XAuthItemParser{ .buffer = binary };
@@ -1860,6 +1909,8 @@ test "struct sizes are as expected" {
     try expect(@sizeOf(CreateGCRequest) == 4 * 4);
     try expect(@sizeOf(CreatePixmapRequest) == 4 * 4);
     try expect(@sizeOf(CopyAreaRequest) == 7 * 4);
+    try expect(@sizeOf(ConnectionSetupReplyStatus) == 8);
+    try expect(@sizeOf(SuccessfulConnectionHeaderAdditional) == 32);
 }
 
 test "pad4 works as expected" {
