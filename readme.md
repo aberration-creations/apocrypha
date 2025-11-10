@@ -1,33 +1,69 @@
-A simple cross platform gui library.
+A simple [Zig](https://ziglang.org/) GUI library. Tested and compatible with
+with `zig 0.15.2`. Clone and run the examples to start. These work out of the 
+box without any additional configuration on Linux or Windows.
+
+```sh
+zig run 2048.zig
+```
 
 ![Screenshot of 2048 game made using this library](./docs/screenshot-2048.png)
+
+```sh
+zig run pathtracer.zig
+```
+
 ![Screenshot of a path tracer](./docs/screenshot-pathtracer.png)
 
-Everything gets rendered into a canvas in CPU memory. You then may do
-as you wish with the canvas:
- - upload it as texture to GPU and overlay it on screen or inside 3d scene
- - output it on a window via a window manager
- - dump it to a file or output stream 
+The way it works is very basic:
 
-To use import public functions from [`src/index.zig`](src/index.zig)
+ 1. allocate canvas
+ 2. paint on it
+ 3. dump contents to window
 
-Tested and confirmed working with zig 0.15.2
+There are wrappers for operating systems to get to window and event handling 
+as quick as possible, but you're welcome to roll your own. For example you
+could load the canvas as a GPU texture and use it as a GUI for an OpenGl 
+application.
 
-Examples can be found at top level.
- - to run just `zig run 2048.zig`
+To use import public functions from [`index.zig`](src/index.zig) This is the
+public API surface that we try to keep stable and not to break.
 
-Examples can be run with [`.vscode/tasks.json`](.vscode/tasks.json)
+**Project goals:**
 
-Some of the linux examples need linking with various xcb libraries.
+- no dependencies required
+- no breaking changes
+
+**Planned development:**
+
+- add more examples (games/small tools)
+- clean up event handling
+- make reusable controls
+- adding a wrapper for glfw
+- make reusable layout primitives
+
+**Not planned:**
+
+- GPU acceleration
+- full unicode support
+- custom font support
+
+I know these are dealbreakers for many projects. Go use other frameworks if
+these are a requirement for you as these features are probably not happening.
+
+**Optional dependencies:**
+
+Some of the experiments do use some additional libaries. This is not core.
+But you may need to manually link additional libs if the build fails.
 
     zig run 2048.zig -lc -lxcb -lxcb-image
 
-On linux the following need to be installed for the xcb integration to work:
+On linux if you used xcb for example you need to insall these:
 
-Ubuntu/Debian
+on Debian
 
     sudo apt install libxcb1-dev libxcb-image0-dev
 
-Fedora
+on Fedora
 
-    sudo dfn insatll libxcb-devel xcb-util-image-devel
+    sudo dfn install libxcb-devel xcb-util-image-devel
+
